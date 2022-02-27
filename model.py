@@ -1,7 +1,8 @@
+from curses.ascii import RS
 import torch
 import torch.nn as nn
 
-from react import Sign, RSign, RPReLU
+from react import Sign, RSign, RPReLU, GeneralConv2d
 
 def conv3x3(in_channel, out_channel, stride=1,padding=1):
     return nn.Conv2d(in_channels=in_channel, out_channels= out_channel, kernel_size=3, stride=stride, padding=padding, bias=False)
@@ -27,7 +28,7 @@ class Base_Normal_Block(nn.Module):
     def forward(self, x):
         out = self.layer1(x)
         out = out + x
-        out = self.layer2(x)
+        out = self.layer2(out)
         return out + x
 
 # Reduction Blocks for baseline model
@@ -57,7 +58,7 @@ class Base_Reduction_Block(nn.Module):
             ]
         )
 
-        self.pool = nn.MaxPool2d(kernel_size = 2, stride = 2)
+        self.pool = nn.AvgPool2d(kernel_size = 2, stride = 2)        
 
     def forward(self, x):
         out1 = self.layer1(x)
@@ -71,6 +72,77 @@ class Base_Reduction_Block(nn.Module):
         out2_2 = out2_2 + pooled_x
 
         return torch.cat([out2_1, out2_1], dim=1)
+
+# Normal Blocks for ReActNet
+class React_Normal_Block(nn.Module):
+    def __init__(self, in_channel):
+        self.layer1 = nn.Sequential([
+            RSign(in_channel),
+            GeneralConv2d(in_channel, in_channel, "scaled_sign", kernel_size=3,stride=1,padding=1),
+            nn.BatchNorm2d(in_channel)
+        ])
+
+        self.layer2 = nn.Sequential([
+            RSign(in_channel),
+            GeneralConv2d(in_channel, in_channel, "scaled_sign", kernel_size=1,stride=1,padding=0),
+            nn.BatchNorm2d(in_channel)
+        ])
+
+        self.rprelu = RPReLU(in_channel)
+
+
+    def forward(self, x):
+        out = self.layer1(x)
+        out = out + x
+
+        out_r = self.rprelu(out)
+
+        out = self.layer2(out_r)
+        out = out + out_r
+
+        out = self.rprelu(out)
+
+        return out
+
+# Reduction Blocks for ReActNet
+class React_Reduction_Block(nn.Module):
+    def __init__(self, in_channel):
+        self.layer1 = nn.Sequential(
+            [
+                RSign(in_channel),
+                GeneralConv2d(in_channels=in_channel, out_channels=in_channel, conv="scaled_sign",kernel_size=3,stride=2,padding=1),
+                nn.BatchNorm2d(in_channel)
+            ]
+        )
+
+        self.layer2 = nn.Sequential(
+            [
+                RSign(in_channel),
+                GeneralConv2d(in_channels=in_channel, out_channels=in_channel, conv="scaled_sign", kernel_size=1, stride=1, padding=1),
+                nn.BatchNorm2d(in_channel)
+            ]
+        )
+
+        self.rprelu = RPReLU(in_channel)
+        self.pool = nn.AvgPool2d(kernel_size=2, stride=2)
+
+    def forward(self, x):
+        out1 = self.layer1(x)
+        pooled_x = self.pool(x)
+        out1 = out1 + pooled_x
+        out1 = self.rprelu(out1)
+
+        out2_1 = self.layer2(out1)
+        out2_2 = self.layer2(out1)
+
+        out2_1 = out2_1 + out1
+        out2_2 = out2_2 + out1
+
+        return torch.cat([out2_1, out2_2],dim=1)
+
+
+
+
 
 
 
