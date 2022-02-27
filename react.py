@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-# RSign : shift + sign
 
 class Shift(nn.Module):
     def __init__(self, out_channels):
@@ -17,7 +16,7 @@ class Shift(nn.Module):
         return f'{self.__class__.__name__}(out_channels={self.out_channels})'
 
 
-class Sign(torch.autograd.Function):
+class DifferentiableSign(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input):
         grad_mask = (input.lt(1) & input.ge(-1)).type(torch.float32)        
@@ -29,7 +28,19 @@ class Sign(torch.autograd.Function):
         mask, = ctx.saved_tensors
         return mask * grad_output    
 
+class Sign(nn.Module):
+    def __init__(self, out_channel):
+        self.out_channel = out_channel
 
+    def forward(self, x):
+        out = DifferentiableSign(self.out_channel).apply(x)
+        return out
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(out_channels={self.out_channel})'
+
+
+# RSign : shift + sign
 class RSign(nn.Module):
     def __init__(self, out_channel):
         self.out_channel = out_channel
@@ -40,9 +51,9 @@ class RSign(nn.Module):
         return out
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(out_channels={self.out_channels})'
+        return f'{self.__class__.__name__}(out_channels={self.out_channel})'
 
-
+# RPReLU : Shift + PReLU + Shift
 class RPReLU(nn.Module):
     def __init__(self, out_channel):
         self.out_channel = out_channel
@@ -55,7 +66,10 @@ class RPReLU(nn.Module):
         return out
     
     def __repr__(self):
-        return f'{self.__class__.__name__}(out_channels={self.out_channels})'
+        return f'{self.__class__.__name__}(out_channels={self.out_channel})'
+
+
+
 
 
 
