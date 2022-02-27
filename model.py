@@ -1,7 +1,7 @@
 from curses.ascii import RS
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 from react import Sign, RSign, RPReLU, GeneralConv2d, ReactBase
 
 def conv3x3(in_channel, out_channel, stride=1,padding=1):
@@ -22,7 +22,7 @@ class Base_Normal_Block(nn.Module):
 
         self.layer2 = nn.Sequential(
             Sign(in_channel),
-            conv1x1(in_channel),
+            conv1x1(in_channel, in_channel, stride=1),
             nn.BatchNorm2d(in_channel)
         )
 
@@ -72,20 +72,24 @@ class Base_Reduction_Block(nn.Module):
 
 class BaselineModel(ReactBase):
     def __init__(self, channel_array):
+        super().__init__()
+        
         self.channels = channel_array
-        self.blocks = [None,None,None,None,None,None,None,None,None,None,None,None]
-        for i in self.channels:
+        self.blocks = []
+        for i, channel in enumerate(self.channels):
             if i == 0:
-                self.blocks.append(Base_Normal_Block(self.channel[i]))
+                self.blocks.append(Base_Normal_Block(channel))
             elif i == i-1:
-                self.blocks.append(Base_Normal_Block(self.channel[i]))
+                self.blocks.append(Base_Normal_Block(channel))
             else:
-                self.blocks.append(Base_Reduction_Block(self.channels[i]))
+                self.blocks.append(Base_Reduction_Block(channel))
+
         self.base_block = nn.ModuleList(self.blocks)
 
     def forward(self, x):
         y = self.base_block(x)
-        return y
+        return F.log_softmax(y.squeeze(dim=2).squeeze(dim=2), dim=1)
+
 
 
 #######################################################################################################
@@ -159,6 +163,25 @@ class React_Reduction_Block(nn.Module):
 
 
 
+class ReactModel(ReactBase):
+    def __init__(self, channel_array):
+        super().__init__()
+        
+        self.channels = channel_array
+        self.blocks = []
+        for i, channel in enumerate(self.channels):
+            if i == 0:
+                self.blocks.append(React_Normal_Block(channel))
+            elif i == i-1:
+                self.blocks.append(React_Normal_Block(channel))
+            else:
+                self.blocks.append(React_Reduction_Block(channel))
+
+        self.base_block = nn.ModuleList(self.blocks)
+
+    def forward(self, x):
+        y = self.base_block(x)
+        return F.log_softmax(y.squeeze(dim=2).squeeze(dim=2), dim=1)
 
 
 
