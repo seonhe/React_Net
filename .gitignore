@@ -114,6 +114,8 @@ celerybeat.pid
 # 경로 무시 (lightning_log 파일, datasets 무시)
 /csv_datamodule/lightning_logs
 */lightning_logs
+./lightning_logs
+lightning_logs
 datasets
 
 # pytorch lightning logs

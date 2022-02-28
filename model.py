@@ -1,4 +1,3 @@
-from curses.ascii import RS
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -68,8 +67,8 @@ class Base_Reduction_Block(nn.Module):
         out2_2 = out2_2 + pooled_x
 
         return torch.cat([out2_1, out2_1], dim=1)
-# 3 Normal, 3 Reduction
 
+# 3 Normal, 3 Reduction
 class BaselineModel(ReactBase):
     def __init__(self, channel_array):
         super().__init__()
