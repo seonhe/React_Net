@@ -56,10 +56,12 @@ class RSign(nn.Module):
     def __init__(self, out_channel):
         super().__init__()
         self.out_channel = out_channel
+        self.shift = Shift(self.out_channel)
+        self.sign = Sign(self.out_channel)
         
     def forward(self, x):
-        out = Shift(self.out_channel).apply(x)
-        out = Sign(self.out_channel).apply(out)
+        out = self.shift(x)
+        out = self.sign(out)
         return out
 
     def __repr__(self):
@@ -70,12 +72,14 @@ class RPReLU(nn.Module):
     def __init__(self, out_channel):
         super().__init__()
         self.out_channel = out_channel
+        self.gamma = Shift(self.out_channel)
         self.prelu = nn.PReLU(self.out_channel, init=0.25)
+        self.zeta = Shift(self.out_channel)
 
     def forward(self,x):
-        out = Shift(self.out_channel).apply(x) # x - gamma
+        out = self.gamma(x) # x - gamma
         out = self.prelu(out)
-        out = Shift(self.out_channel).apply(x) # PReLU - zeta
+        out = self.zeta(out) # PReLU - zeta
         return out
     
     def __repr__(self):
