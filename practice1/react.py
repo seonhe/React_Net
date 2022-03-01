@@ -26,20 +26,38 @@ class DifferntiableSign(torch.autograd.Function):
     def backward(ctx, grad_output):
         mask, = ctx.saved_tensors
         return mask*grad_output
-
-
-class React_Sign(torch.autograd.Function):
+'''
+class Sign_Parameter(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
-        self.weight = nn.Parameter(torch.zeros(1, in_channels, 1, 1), requires_grad=True).type(torch.float32)
+        self.in_channels=in_channels
+        
+    def forward(self):
+        weight = nn.Parameter(torch.zeros(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
+        
+        return weight'''
 
-    def forward(self, input):    
-        return  2 * torch.ge(input, self.weight).type(torch.float32) - 1
+class R_Sign(torch.autograd.Function):
+    @staticmethod
+    def forward(weight, input):    
+        return  2 * torch.ge(input, weight).type(torch.float32) - 1
     
-    def backward(self, grad_output):
-        return -torch.sum(torch.sum(grad_output,dim=2),dim=3)
+    @staticmethod
+    def backward(grad_output):
+        return -torch.sum(torch.sum(grad_output,dim=2),dim=3), None
+    
+class React_Sign(nn.Module):
+    def __init__(self, in_channels):
+        self.in_channels=in_channels
+        self.weight = nn.Parameter(torch.zeros(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
+        
+    def forward(self,x):
+        return R_Sign(self.weight, x)
+        
 
-class ProduceParameter(nn.Module):
+
+
+class Relu_Parameter(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
         self.in_channels=in_channels
@@ -75,7 +93,7 @@ class React_PReLu(nn.Module):
         self.in_channels=in_channels
         
     def forward(self, x):
-        parameter=ProduceParameter()
+        parameter=Relu_Parameter()
         x_bias, y_bias, inclination = parameter(self.in_channels)
         out= PReLu(x,x_bias, y_bias, inclination)
         
