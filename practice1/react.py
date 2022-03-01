@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from torchmetrics.functional import accuracy
 
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
 
 def limit_conv_weight(member):
     if type(member) == GeneralConv2d:
@@ -26,22 +28,10 @@ class DifferntiableSign(torch.autograd.Function):
     def backward(ctx, grad_output):
         mask, = ctx.saved_tensors
         return mask*grad_output
-'''
-class Sign_Parameter(nn.Module):
-    def __init__(self, in_channels):
-        super().__init__()
-        self.in_channels=in_channels
-        
-    def forward(self):
-        weight = nn.Parameter(torch.zeros(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
-        
-        return weight'''
 
 class R_Sign(torch.autograd.Function):
     @staticmethod
     def forward(ctx, weight, x):    
-        print(weight.shape)
-        print(x.shape)
         return  2 * torch.ge(x, weight).type(torch.float32) - 1
     
     @staticmethod
