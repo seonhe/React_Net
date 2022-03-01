@@ -42,7 +42,7 @@ class React_Sign(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
         self.in_channels=in_channels
-        self.weight = nn.Parameter(torch.zeros(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
+        self.weight = nn.Parameter(torch.rand(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
         
     def forward(self,x):
         return R_Sign.apply(self.weight, x)
@@ -53,21 +53,7 @@ class Squeeze(nn.Module):
     super().__init__()
   def forward(self,x):
     return torch.squeeze(x) 
-
-
-'''
-class Relu_Parameter(nn.Module):
-    def __init__(self, in_channels):
-        super().__init__()
-        self.in_channels=in_channels
-    
-    def forward(self):
-        x_bias = nn.Parameter(torch.ones(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
-        y_bias = nn.Parameter(torch.zeros(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
-        inclination = nn.Parameter(torch.zeros(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
-        
-        return x_bias, y_bias, inclination
-'''       
+      
            
 class PReLu(torch.autograd.Function):
     @staticmethod
@@ -90,9 +76,9 @@ class React_PReLu(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
         self.in_channels=in_channels
-        self.x_bias = nn.Parameter(torch.ones(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
-        self.y_bias = nn.Parameter(torch.zeros(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
-        self.inclination = nn.Parameter(torch.zeros(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)        
+        self.x_bias = nn.Parameter(torch.rand(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
+        self.y_bias = nn.Parameter(torch.rand(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
+        self.inclination = nn.Parameter(torch.rand(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)        
         
     def forward(self, x):
         out= PReLu.apply(x,self.x_bias, self.y_bias, self.inclination)

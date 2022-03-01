@@ -17,7 +17,6 @@ class Model(BCNNBase):
         self.blocks = nn.ModuleList([GeneralConv2d(in_channels=3, out_channels=32,
                         conv='sign', kernel_size=3, padding=1, stride=1)])
         self.structure=structure
-        self.fcl=nn.Linear(in_features=1024, out_features=10)
 
     def forward(self, x):
         for i in range(len(self.structure)):
