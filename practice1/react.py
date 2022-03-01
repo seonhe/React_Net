@@ -56,7 +56,13 @@ class React_Sign(nn.Module):
         
     def forward(self,x):
         return R_Sign.apply(self.weight, x)
-        
+       
+
+class Squeeze(nn.Module):
+  def __init__(self):
+    super().__init__()
+  def forward(self,x):
+    return torch.squeeze(x) 
 
 
 '''
