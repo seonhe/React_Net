@@ -1,4 +1,4 @@
-from msvcrt import kbhit
+
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
@@ -12,7 +12,7 @@ from react import GeneralConv2d
 class Model(BCNNBase):
     def __init__(self, structure, **kwargs):
         super().__init__(**kwargs)        
-        self.blocks = nn.ModuleList([GeneralConv2d(in_channels=3, out_channels=128,
+        self.blocks = nn.ModuleList([GeneralConv2d(in_channels=3, out_channels=32,
                         conv='sign', kernel_size=3, padding=1, stride=1)])
         self.structure=structure
         self.fcl=nn.Linear(in_features=1024, out_features=10)
@@ -41,42 +41,17 @@ class Model(BCNNBase):
                     padding2=self.structure[i]['padding2'],
                     conv=self.structure[i]['conv'],
                     dropout=self.structure[i]['dropout']))
-            
+        print("start")
         for idx, block in enumerate(self.blocks):
             x = block(x)
-            
-        x=self.fcl(x)           
-        return F.log_softmax(x.squeeze(dim=2).squeeze(dim=2), dim=1)
-
-'''
-class Normal_Block(nn.Sequential):
-    def __init__(self, 
-                 in_channels, 
-                 out_channels, 
-                 kernel_size, 
-                 conv,
-                 stride=1, 
-                 padding=1, 
-                 act_fn='sign',
-                 dropout=0):
-        super().__init__()
-        
-        self.add_layer(GeneralConv2d(in_channels=in_channels, out_channels=out_channels, padding=padding, kernel_size=kernel_size, conv=conv))                    
-            
-        self.add_layer(nn.BatchNorm2d(out_channels, affine=True))
-        
-        if act_fn == 'sign':
-            self.add_layer(Shift(out_channels=out_channels))
-            self.add_layer(Clamp())
-            self.add_layer(BinaryActivation())
-        elif act_fn == 'relu':
-            self.add_layer(nn.ReLU())
-            
-        if dropout > 0:
-            self.add_layer(nn.Dropout(dropout))
-    
-    def add_layer(self, layer):
-        self.add_module(layer.__class__.__name__, layer) #name(string), module'''
+            print(idx)
+        print(x.shape)
+        x=x.squeeze(dim=2).squeeze(dim=2)
+        print(x.shape)
+        x=self.fcl(x)  
+        print(x.shape)
+        print("end")         
+        return F.log_softmax(x, dim=1)
       
 
 class Normal_Block(nn.Sequential):
@@ -97,8 +72,8 @@ class Normal_Block(nn.Sequential):
         self.Conv2=GeneralConv2d(in_channels=in_channels, out_channels=out_channels, conv=conv, kernel_size=kernel_size2, padding=padding2, stride=stride2)
         self.RPRelu2=React_PReLu(in_channels=out_channels)
         
-        self.bn1=nn.BatchNorm2d(in_channels=in_channels, affine=True)
-        self.bn2=nn.BatchNorm2d(in_channels=out_channels, affine=True)
+        self.bn1=nn.BatchNorm2d(num_features=in_channels, affine=True)
+        self.bn2=nn.BatchNorm2d(num_features=out_channels, affine=True)
     
     def forward(self, x):
         y=self.Rsign1(x)
@@ -130,19 +105,19 @@ class Reduction_Block(nn.Module):
         self.Rsign1=React_Sign(in_channels=in_channels)
         self.Conv1=GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv=conv, kernel_size=kernel_size1, padding=padding1, stride=stride1)
         self.avgpool=nn.AvgPool2d(kernel_size=2, stride=2, padding=0)
-        self.RPRelu1=React_PReLu(in_channels=out_channels)
+        self.RPRelu1=React_PReLu(in_channels=in_channels)
         
         self.Rsign2=React_Sign(in_channels=in_channels)
         self.Conv2=GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv=conv, kernel_size=kernel_size2, padding=padding2, stride=stride2)
-        self.RPRelu2=React_PReLu(in_channels=out_channels)
+        self.RPRelu2=React_PReLu(in_channels=in_channels)
         
         self.Rsign3=React_Sign(in_channels=in_channels)
         self.Conv3=GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv=conv, kernel_size=kernel_size2, padding=padding2, stride=stride2)
-        self.RPRelu3=React_PReLu(in_channels=out_channels)
+        self.RPRelu3=React_PReLu(in_channels=in_channels)
         
-        self.bn1=nn.BatchNorm2d(in_channels=in_channels, affine=True)
-        self.bn2=nn.BatchNorm2d(in_channels=in_channels, affine=True)
-        self.bn3=nn.BatchNorm2d(in_channels=in_channels, affine=True)
+        self.bn1=nn.BatchNorm2d(num_features=in_channels, affine=True)
+        self.bn2=nn.BatchNorm2d(num_features=in_channels, affine=True)
+        self.bn3=nn.BatchNorm2d(num_features=in_channels, affine=True)
     
     def forward(self, x):
         y=self.Rsign1(x)
@@ -166,29 +141,6 @@ class Reduction_Block(nn.Module):
         
         return torch.cat((k1,k2),dim=1)
     
-'''
-class ShortCut(nn.Module):
-    def __init__(self, avg_pool=None, in_channels=3 , out_channels=128 , kernel_size=3, padding=1, stride=1):
-        self.avg_pool=avg_pool
-        self.in_channels=in_channels
-        
-        self.Rsign=React_Sign(in_channels=self.in_channels)
-        self.conv=GeneralConv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, padding=padding, stride=stride )
-        self.bn=nn.BatchNorm2d(out_channels=out_channels, affine=True)
-        self.avgpool=nn.AvgPool2d(kernel_size=2, stride=2, padding=0,)
-        self.avg_pool=avg_pool
-        
-    def forward(self, x):
-        y=self.Rsign(x)
-        y=self.conv(y)
-        y=self.bn(y)
-        
-        if(self.avg_pool!=None):
-            k=x
-        else:
-            k=self.avgpool(x)
-            
-        return y+k'''
         
         
         

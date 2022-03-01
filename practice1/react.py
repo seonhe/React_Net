@@ -39,24 +39,27 @@ class Sign_Parameter(nn.Module):
 
 class R_Sign(torch.autograd.Function):
     @staticmethod
-    def forward(weight, input):    
-        return  2 * torch.ge(input, weight).type(torch.float32) - 1
+    def forward(ctx, weight, x):    
+        print(weight.shape)
+        print(x.shape)
+        return  2 * torch.ge(x, weight).type(torch.float32) - 1
     
     @staticmethod
-    def backward(grad_output):
+    def backward(ctx, grad_output):
         return -torch.sum(torch.sum(grad_output,dim=2),dim=3), None
     
 class React_Sign(nn.Module):
     def __init__(self, in_channels):
+        super().__init__()
         self.in_channels=in_channels
         self.weight = nn.Parameter(torch.zeros(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
         
     def forward(self,x):
-        return R_Sign(self.weight, x)
+        return R_Sign.apply(self.weight, x)
         
 
 
-
+'''
 class Relu_Parameter(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
@@ -68,12 +71,12 @@ class Relu_Parameter(nn.Module):
         inclination = nn.Parameter(torch.zeros(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
         
         return x_bias, y_bias, inclination
-        
+'''       
            
 class PReLu(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, x_bias, y_bias, inclination):
-        x_bias_mask=torch.le(x,x_bias)*(-inclination)-torch.gt(x,x_bias)
+        x_bias_mask=-(torch.le(x,x_bias)*inclination).type(torch.float32)-torch.gt(x,x_bias).type(torch.float32)
         y_bias_mask=torch.le(x,x_bias)*(x-x_bias)
         inclination_mask=1
         
@@ -91,36 +94,14 @@ class React_PReLu(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
         self.in_channels=in_channels
+        self.x_bias = nn.Parameter(torch.ones(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
+        self.y_bias = nn.Parameter(torch.zeros(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)
+        self.inclination = nn.Parameter(torch.zeros(1, self.in_channels, 1, 1), requires_grad=True).type(torch.float32)        
         
     def forward(self, x):
-        parameter=Relu_Parameter()
-        x_bias, y_bias, inclination = parameter(self.in_channels)
-        out= PReLu(x,x_bias, y_bias, inclination)
+        out= PReLu.apply(x,self.x_bias, self.y_bias, self.inclination)
         
         return out
-         
-'''   
-class Clamp(nn.Module):
-    def forward(self, x):
-        return torch.clamp(x, min=-1, max=1)
-    
-    def __repr__(self):
-        return f'{self.__class__.__name__}'
-
-    
-class Shift(nn.Module):
-    def __init__(self, out_channels):
-        super().__init__()
-        self.bias = nn.Parameter(torch.zeros(1, out_channels, 1, 1), requires_grad=True)
-        self.out_channels = out_channels
-
-    def forward(self, x):
-        out = x + self.bias.expand_as(x)
-        return out       
-    
-    def __repr__(self):
-        return f'{self.__class__.__name__}(out_channels={self.out_channels})'
-'''
 
 class GeneralConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, conv, kernel_size=3, padding=1, stride=1):
@@ -149,41 +130,7 @@ class GeneralConv2d(nn.Module):
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, stride=1, padding={self.padding}, conv={self.conv})'    
-'''   
-# class BinaryConv2d(nn.Module):
-#     def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, scaled_sign=True):
-#         super().__init__()
-#         self.padding = padding
-#         self.in_channels = in_channels
-#         self.out_channels = out_channels
-#         self.kernel_size = kernel_size
-#         self.padding = padding        
-#         self.number_of_weights = in_channels * out_channels * kernel_size * kernel_size
-#         self.shape = (out_channels, in_channels, kernel_size, kernel_size)
-#         self.weight = nn.Parameter(torch.rand((self.number_of_weights,1)) * 0.001, requires_grad=True)
-#         self.scaled_sign = scaled_sign
 
-#     def forward(self, x):
-#         real_weights = self.weight.view(self.shape)
-#         if self.scaled_sign:
-#             scaling_factor = torch.mean(torch.mean(torch.mean(abs(real_weights),dim=3,keepdim=True),dim=2,keepdim=True),dim=1,keepdim=True)
-#             y = F.conv2d(x, scaling_factor * DifferntiableSign.apply(real_weights), stride=1, padding=self.padding)
-#         else:
-#             y = F.conv2d(x, DifferntiableSign.apply(real_weights), stride=1, padding=self.padding)
-#         return y
-
-#     def __repr__(self):
-#         return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, stride=1, padding={self.padding}, scaled_sign={self.scaled_sign})'
-
-
-class BinaryActivation(nn.Module):
-    def __init__(self):
-        super(BinaryActivation, self).__init__()
-
-    def forward(self, x):
-        return DifferntiableSign.apply(x)
-'''
-          
 class BCNNBase(LightningModule):
     def __init__(self, 
                  limit_conv_weight=True,
