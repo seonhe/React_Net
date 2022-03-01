@@ -16,7 +16,7 @@ def limit_bn_weight(member):
 
 class DifferntiableSign(torch.autograd.Function):
     @staticmethod
-    def forward(ctx,input):
+    def forward(ctx, input):
         grad_mask=(input.lt(1)&input.ge(-1)).type(torch.float32)
         ctx.save_for_backward(grad_mask)
         
@@ -31,13 +31,13 @@ class DifferntiableSign(torch.autograd.Function):
 class React_Sign(torch.autograd.Function):
     def __init__(self, in_channels):
         super().__init__()
-        self.weight = nn.Parameter(torch.zeros(1, in_channels, 1, 1), requires_grad=True)
+        self.weight = nn.Parameter(torch.zeros(1, in_channels, 1, 1), requires_grad=True).type(torch.float32)
 
     def forward(self, input):    
         return  2 * torch.ge(input, self.weight).type(torch.float32) - 1
     
     def backward(self, grad_output):
-        return -grad_output
+        return -torch.sum(torch.sum(grad_output,dim=2),dim=3)
 
 class ProduceParameter(nn.Module):
     def __init__(self, in_channels):
@@ -52,7 +52,7 @@ class ProduceParameter(nn.Module):
         return x_bias, y_bias, inclination
         
            
-class React_PReLu(torch.autograd.Function):
+class PReLu(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, x_bias, y_bias, inclination):
         x_bias_mask=torch.le(x,x_bias)*(-inclination)-torch.gt(x,x_bias)
@@ -67,9 +67,20 @@ class React_PReLu(torch.autograd.Function):
     def backward(ctx, grad_output):
         x_mask, y_mask, inclination_mask = ctx.saved_variables
         
-        return None, x_mask, y_mask, inclination_mask
+        return None, x_mask*grad_output, y_mask*grad_output, inclination_mask*grad_output
+    
+class React_PReLu(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.in_channels=in_channels
         
+    def forward(self, x):
+        parameter=ProduceParameter()
+        x_bias, y_bias, inclination = parameter(self.in_channels)
+        out= PReLu(x,x_bias, y_bias, inclination)
         
+        return out
+         
 '''   
 class Clamp(nn.Module):
     def forward(self, x):
@@ -168,7 +179,7 @@ class BCNNBase(LightningModule):
         super().__init__()
         self.save_hyperparameters()
         # for logging the comp. graph
-        self.example_input_array = torch.ones((512, 3, 32, 32)) #########
+        #self.example_input_array = torch.ones((512, 3, 32, 32)) #########
 
     def training_step(self, batch, batch_idx):
         x, y = batch
