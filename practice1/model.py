@@ -7,6 +7,7 @@ from react import BCNNBase
 from react import React_Sign
 from react import React_PReLu
 from react import GeneralConv2d
+from react import Squeeze
 
 
 class Model(BCNNBase):
@@ -41,16 +42,15 @@ class Model(BCNNBase):
                     padding2=self.structure[i]['padding2'],
                     conv=self.structure[i]['conv'],
                     dropout=self.structure[i]['dropout']))
+                
+        self.blocks.append(Squeeze())
+        self.blocks.append(nn.Linear(in_features=1024, out_features=10))
         print("start")
         for idx, block in enumerate(self.blocks):
             x = block(x)
             print(idx)
-        print(x.shape)
-        x=x.squeeze(dim=2).squeeze(dim=2)
-        print(x.shape)
-        x=self.fcl(x)  
-        print(x.shape)
-        print("end")         
+            print(x.shape)  
+        print(x)
         return F.log_softmax(x, dim=1)
       
 
