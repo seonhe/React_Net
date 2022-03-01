@@ -9,6 +9,7 @@ from react import React_PReLu
 from react import GeneralConv2d
 from react import Squeeze
 
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 class Model(BCNNBase):
     def __init__(self, structure, **kwargs):
