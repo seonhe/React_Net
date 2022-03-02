@@ -17,59 +17,59 @@ def limit_bn_weight(member):
  
 class RSign(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, input, weight):
-        grad_mask_input=(input.lt(1+weight)&input.ge(-1+weight)).type(torch.float32)
-        grad_mask_weight=-1
-        ctx.save_for_backward(grad_mask_input, grad_mask_weight)
+    def forward(ctx, x, weight):
+
+        grad_mask_input=(x.lt(1+weight)&x.ge(-1+weight)).type(torch.float32)
+        ctx.save_for_backward(grad_mask_input)
         
-        return 2*torch.ge(input,weight).type(torch.float32)-1
+        return 2*torch.ge(x,weight).type(torch.float32)-1
     
     @staticmethod
     def backward(ctx, grad_output):
-        mask_input, mask_weight = ctx.saved_tensors
-        return mask_input*grad_output, mask_weight*torch.sum(torch.sum(grad_output,dim=2),dim=2)
+        mask_input, = ctx.saved_tensors
+        return mask_input*grad_output, -torch.unsqueeze(torch.unsqueeze(torch.sum(torch.sum(grad_output,dim=2),dim=2),dim=2),dim=2)
  
 class ReAct_Sign(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
-        self.parameter= nn.Parameter(torch.rand((1,1,in_channels,1)) * 0.001, requires_grad=True).type(torch.float32)
+        self.parameter= nn.Parameter(torch.rand((1,in_channels,1,1)) * 0.001, requires_grad=True).type(torch.float32).to(device)
         
     def forward(self,x):
-        y=RSign(x, self.parameter)
+        y=RSign.apply(x, self.parameter)
         return y
     
 class RPReLu(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, input, beta, gamma, zeta):
-        grad_mask_input=input.gt(gamma).type(torch.float32)+input.le(gamma).type(torch.float)*beta
-        grad_mask_beta=input.le(gamma).type(torch.float32)*(input-gamma)
-        grad_mask_gamma=-input.le(gamma).type(torch.float32)*(beta)-input.gt(gamma).type(torch.float32)
-        grad_mask_zeta=1
-        ctx.save_for_backward(grad_mask_input, grad_mask_beta, grad_mask_gamma, grad_mask_zeta)
+    def forward(ctx, x, beta, gamma, zeta):
+        grad_mask_input=x.gt(gamma).type(torch.float32)+x.le(gamma).type(torch.float)*beta
+        grad_mask_beta=x.le(gamma).type(torch.float32)*(x-gamma)
+        grad_mask_gamma=-x.le(gamma).type(torch.float32)*(beta)-x.gt(gamma).type(torch.float32)
+        #grad_mask_zeta=1
+        ctx.save_for_backward(grad_mask_input, grad_mask_beta, grad_mask_gamma)#, grad_mask_zeta)
         
-        return input.gt(gamma).type(torch.float32)*(input-gamma+zeta)+input.le(gamma).type(torch.float32)*(beta*(input-gamma)+zeta)
+        return x.gt(gamma).type(torch.float32)*(x-gamma+zeta)+x.le(gamma).type(torch.float32)*(beta*(x-gamma)+zeta)
         
     @staticmethod
     def backward(ctx, grad_output):
-        mask_input, mask_beta, mask_gamma, mask_zeta=ctx.saved_tensors
-        return mask_input*grad_output, mask_beta*grad_output, mask_gamma*grad_output, mask_zeta*grad_output
+        mask_input, mask_beta, mask_gamma, =ctx.saved_tensors
+        return mask_input*grad_output, mask_beta*grad_output, mask_gamma*grad_output, grad_output
     
 class ReAct_Relu(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
-        self.beta= nn.Parameter(torch.rand((1,1,in_channels,1)) * 0.001, requires_grad=True).type(torch.float32)
-        self.gamma= nn.Parameter(torch.rand((1,1,in_channels,1)) * 0.001, requires_grad=True).type(torch.float32)
-        self.zeta= nn.Parameter(torch.rand((1,1,in_channels,1)) * 0.001, requires_grad=True).type(torch.float32)
+        self.beta= nn.Parameter(torch.rand((1,in_channels,1,1)) * 0.001, requires_grad=True).type(torch.float32).to(device)
+        self.gamma= nn.Parameter(torch.rand((1,in_channels,1,1)) * 0.001, requires_grad=True).type(torch.float32).to(device)
+        self.zeta= nn.Parameter(torch.rand((1,in_channels,1,1)) * 0.001, requires_grad=True).type(torch.float32).to(device)
     
     def forward(self, x):
-        y=RPReLu(x,self.beta, self.gamma, self.zeta)
+        y=RPReLu.apply(x,self.beta, self.gamma, self.zeta)
         return y
 
 class Squeeze(nn.Module):
     def __init__(self):
         super().__init__()
     def forward(self,x):
-        return torch.squeeze(x) 
+        return torch.squeeze(x)
     
 
 class DifferntiableSign(torch.autograd.Function):
@@ -95,19 +95,19 @@ class GeneralConv2d(nn.Module):
         self.padding = padding        
         self.number_of_weights = in_channels * out_channels * kernel_size * kernel_size
         self.shape = (out_channels, in_channels, kernel_size, kernel_size)
-        self.weight = nn.Parameter(torch.rand((self.number_of_weights,1)) * 0.001, requires_grad=True)
+        self.weight = nn.Parameter(torch.rand((self.number_of_weights,1)) * 0.001, requires_grad=True).to(device)
         self.conv = conv
         self.stride=stride
 
     def forward(self, x):
         real_weights = self.weight.view(self.shape)
         if self.conv == 'scaled_sign':
-            scaling_factor = torch.mean(torch.mean(torch.mean(abs(real_weights),dim=3,keepdim=True),dim=2,keepdim=True),dim=1,keepdim=True)
-            y = F.conv2d(x, scaling_factor * DifferntiableSign.apply(real_weights), stride=self.stride, padding=self.padding)
+            scaling_factor = torch.mean(torch.mean(torch.mean(abs(real_weights),dim=3,keepdim=True),dim=2,keepdim=True),dim=1,keepdim=True).to(device)
+            y = F.conv2d(x, scaling_factor * DifferntiableSign.apply(real_weights), stride=self.stride, padding=self.padding).to(device)
         elif self.conv == 'sign':
-            y = F.conv2d(x, DifferntiableSign.apply(real_weights), stride=self.stride, padding=self.padding)
+            y = F.conv2d(x, DifferntiableSign.apply(real_weights), stride=self.stride, padding=self.padding).to(device)
         else:
-            y = F.conv2d(x, real_weights, stride=self.stride, padding=self.padding)        
+            y = F.conv2d(x, real_weights, stride=self.stride, padding=self.padding).to(device)        
         return y
 
     def __repr__(self):

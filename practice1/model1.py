@@ -10,51 +10,76 @@ from react1 import GeneralConv2d
 from react1 import Squeeze
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
 class Model(BCNNBase):
     def __init__(self, structure, **kwargs):
         super().__init__(**kwargs)        
-        self.blocks = nn.ModuleList([])
-        self.structure=structure
+        self.blocks = nn.ModuleList([
+            Block(in_channels=structure[i]['in_channels'],
+                       out_channels=structure[i]['out_channels'],
+                       kernel_size1=structure[i]['kernel_size1'],
+                       kernel_size2=structure[i]['kernel_size2'],
+                       stride1=structure[i]['stride1'],
+                       stride2=structure[i]['stride2'],
+                       padding1=structure[i]['padding1'],
+                       padding2=structure[i]['padding2'],
+                       conv=structure[i]['conv'],
+                       dropout=structure[i]['dropout'])
+            for i in range(len(structure))
+        ])
 
-    def forward(self, x):
-        self.blocks.append(GeneralConv2d(in_channels=3, out_channels=32,
-                        conv='scaled_sign', kernel_size=3, padding=1, stride=1))
-        
-        for i in range(len(self.structure)):
-            if(self.structure[i]['in_channels']==self.structure[i]['out_channels']):
-                self.blocks.append(Normal_Block(in_channels=self.structure[i]['in_channels'],
-                    out_channels=self.structure[i]['out_channels'],
-                    kernel_size1=self.structure[i]['kernel_size1'],
-                    kernel_size2=self.structure[i]['kernel_size2'],
-                    stride1=self.structure[i]['stride1'],
-                    stride2=self.structure[i]['stride2'],
-                    padding1=self.structure[i]['padding1'],
-                    padding2=self.structure[i]['padding2'],
-                    conv=self.structure[i]['conv'],
-                    dropout=self.structure[i]['dropout']))
-            else:
-                self.blocks.append(Reduction_Block(in_channels=self.structure[i]['in_channels'],
-                    out_channels=self.structure[i]['out_channels'],
-                    kernel_size1=self.structure[i]['kernel_size1'],
-                    kernel_size2=self.structure[i]['kernel_size2'],
-                    stride1=self.structure[i]['stride1'],
-                    stride2=self.structure[i]['stride2'],
-                    padding1=self.structure[i]['padding1'],
-                    padding2=self.structure[i]['padding2'],
-                    conv=self.structure[i]['conv'],
-                    dropout=self.structure[i]['dropout']))
-                
         self.blocks.append(Squeeze())
         self.blocks.append(nn.Linear(in_features=1024, out_features=10))
+
+    def forward(self, x):
+        conv=GeneralConv2d(in_channels=3, out_channels=32,
+                        conv='scaled_sign', kernel_size=3, padding=1, stride=1)
+        x=conv(x)
         
-        print("start")
         for idx, block in enumerate(self.blocks):
             x = block(x)
-            print(idx)
-            print(x.shape)  
-        print(x)
+            
         return F.log_softmax(x, dim=1)
+    
+class Block(nn.Module):
+    def __init__(self, 
+                 in_channels, 
+                 out_channels, 
+                 kernel_size1, kernel_size2,
+                 conv,
+                 stride1=1, stride2=1,
+                 padding1=1, padding2=1,
+                 dropout=0):
+      super().__init__()
+      self.in_channels=in_channels
+      self.out_channels=out_channels
+      self.kernel_size1=kernel_size1
+      self.kernel_size2=kernel_size2
+      self.conv=conv
+      self.stride1=stride1
+      self.stride2=stride2
+      self.padding1=padding1
+      self.padding2=padding2
+      self.dropout=dropout
+
+    def forward(self, x):
+      if(self.in_channels==self.out_channels):
+        block=Normal_Block(in_channels=self.in_channels, 
+                 out_channels=self.out_channels, 
+                 kernel_size1=self.kernel_size1, kernel_size2=self.kernel_size2,
+                 conv=self.conv,
+                 stride1=self.stride1, stride2=self.stride2,
+                 padding1=self.padding1, padding2=self.padding2,
+                 dropout=self.dropout) 
+      else:
+        block=Reduction_Block(in_channels=self.in_channels, 
+                 out_channels=self.out_channels, 
+                 kernel_size1=self.kernel_size1, kernel_size2=self.kernel_size2,
+                 conv=self.conv,
+                 stride1=self.stride1, stride2=self.stride2,
+                 padding1=self.padding1, padding2=self.padding2,
+                 dropout=self.dropout) 
+
+      return block(x)
       
 
 class Normal_Block(nn.Sequential):
