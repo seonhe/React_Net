@@ -13,17 +13,17 @@ def limit_bn_weight(member):
         member.weight.data.abs_().clamp_(min=1e-2)
 
 class Shift(nn.Module):
-    def __init__(self, out_channels):
+    def __init__(self, in_channels):
         super().__init__()
-        self.bias = nn.Parameter(torch.zeros(1, out_channels, 1, 1), requires_grad=True)
-        self.out_channels = out_channels
+        self.bias = nn.Parameter(torch.zeros(1, in_channels, 1, 1), requires_grad=True)
+        self.in_channels = in_channels
 
     def forward(self, x):
         out = x + self.bias.expand_as(x)
         return out       
     
     def __repr__(self):
-        return f'{self.__class__.__name__}(out_channels={self.out_channels})'
+        return f'{self.__class__.__name__}(in_channels={self.in_channels})'
 
 
 class DifferentiableSign(torch.autograd.Function):
@@ -39,25 +39,25 @@ class DifferentiableSign(torch.autograd.Function):
         return mask * grad_output    
 
 class Sign(nn.Module):
-    def __init__(self, out_channel):
+    def __init__(self, in_channels):
         super().__init__()
-        self.out_channel = out_channel
+        self.in_channels = in_channels
 
     def forward(self, x):
-        out = DifferentiableSign(self.out_channel).apply(x)
+        out = DifferentiableSign(self.in_channels).apply(x)
         return out
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(out_channels={self.out_channel})'
+        return f'{self.__class__.__name__}(in_channels={self.in_channels})'
 
 
 # RSign : shift + sign
 class RSign(nn.Module):
-    def __init__(self, out_channel):
+    def __init__(self, in_channels):
         super().__init__()
-        self.out_channel = out_channel
-        self.shift = Shift(self.out_channel)
-        self.sign = Sign(self.out_channel)
+        self.in_channels = in_channels
+        self.shift = Shift(self.in_channels)
+        self.sign = Sign(self.in_channels)
         
     def forward(self, x):
         out = self.shift(x)
@@ -65,16 +65,16 @@ class RSign(nn.Module):
         return out
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(out_channels={self.out_channel})'
+        return f'{self.__class__.__name__}(in_channels={self.in_channels})'
 
 # RPReLU : Shift + PReLU + Shift
 class RPReLU(nn.Module):
-    def __init__(self, out_channel):
+    def __init__(self, in_channels):
         super().__init__()
-        self.out_channel = out_channel
-        self.gamma = Shift(self.out_channel)
-        self.prelu = nn.PReLU(self.out_channel, init=0.25)
-        self.zeta = Shift(self.out_channel)
+        self.in_channels = in_channels
+        self.gamma = Shift(self.in_channels)
+        self.prelu = nn.PReLU(self.in_channels, init=0.25)
+        self.zeta = Shift(self.in_channels)
 
     def forward(self,x):
         out = self.gamma(x) # x - gamma
@@ -83,7 +83,21 @@ class RPReLU(nn.Module):
         return out
     
     def __repr__(self):
-        return f'{self.__class__.__name__}(out_channels={self.out_channel})'
+        return f'{self.__class__.__name__}(in_channels={self.in_channels})'
+
+class firstconv3x3(nn.Module):
+    def __init__(self, in_channels, out_channels, stride):
+        super(firstconv3x3, self).__init__()
+
+        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, stride, 1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+
+    def forward(self, x):
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+
+        return out
 
 
 class GeneralConv2d(nn.Module):
@@ -107,7 +121,7 @@ class GeneralConv2d(nn.Module):
             y = F.conv2d(x, scaling_factor * Sign.apply(real_weights), stride=self.stride, padding=self.padding)
         elif self.conv == 'sign':
             y = F.conv2d(x, Sign.apply(real_weights), stride=self.stride, padding=self.padding)
-        else:
+        else: # real
             y = F.conv2d(x, real_weights, stride=self.stride, padding=self.padding)        
         return y
 
