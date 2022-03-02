@@ -118,9 +118,9 @@ class GeneralConv2d(nn.Module):
         real_weights = self.weight.view(self.shape)
         if self.conv == 'scaled_sign':
             scaling_factor = torch.mean(torch.mean(torch.mean(abs(real_weights),dim=3,keepdim=True),dim=2,keepdim=True),dim=1,keepdim=True)
-            y = F.conv2d(x, scaling_factor * Sign.apply(real_weights), stride=self.stride, padding=self.padding)
+            y = F.conv2d(x, scaling_factor * DifferentiableSign.apply(real_weights), stride=self.stride, padding=self.padding)
         elif self.conv == 'sign':
-            y = F.conv2d(x, Sign.apply(real_weights), stride=self.stride, padding=self.padding)
+            y = F.conv2d(x, DifferentiableSign.apply(real_weights), stride=self.stride, padding=self.padding)
         else: # real
             y = F.conv2d(x, real_weights, stride=self.stride, padding=self.padding)        
         return y

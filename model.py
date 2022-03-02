@@ -102,7 +102,7 @@ class Normal_block(nn.Module):
         out = out + x 
         
 
-        if self.act_rprelu is not None:
+        if self.conv=='scaled_sign':
             out1 = self.act_rprelu(out)
         else:
             out1 = out
@@ -110,7 +110,7 @@ class Normal_block(nn.Module):
         out = self.layer2(out1)
         out2 = out + out1
 
-        if self.act_rprelu is not None:
+        if self.conv=='scaled_sign':
             out3 = self.act_rprelu(out2)
         else:
             out3 = out2
@@ -164,7 +164,7 @@ class Reduction_Block(nn.Module):
 
         out1 = out + avg_out
 
-        if self.in_rprelu is not None:
+        if self.conv=='scaled_sign':
             out2 = self.in_rprelu(out1)
         else:
             out2 = out1
@@ -175,7 +175,7 @@ class Reduction_Block(nn.Module):
         out3_1 = out2_1 + out2
         out3_2 = out2_2 + out2
 
-        if self.in_rprelu is not None:
+        if self.conv=='scaled_sign':
             out4_1 = self.in_rprelu(out3_1)
             out4_2 = self.in_rprelu(out3_2)
 
