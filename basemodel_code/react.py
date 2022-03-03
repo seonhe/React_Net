@@ -202,3 +202,110 @@ class ReactBase(LightningModule):
             'monitor': 'val_acc',
         }
         return {'optimizer': optimizer, 'lr_scheduler': scheduler_dict}    
+
+class DistributedReactBase(LightningModule):
+    def __init__(self, 
+                 teacher_model=None,
+                 limit_conv_weight=True,
+                 limit_bn_weight=True,
+                 adam_init_lr=0.01, 
+                 adam_weight_decay=0,
+                 adam_betas=(0.9, 0.999),
+                 lr_reduce_factor=0.1,
+                 lr_patience=50,
+                ):
+        super().__init__()
+        self.save_hyperparameters()
+        # for logging the comp. graph
+        self.example_input_array = torch.ones((512, 3, 32, 32))
+        self.teacher_model = teacher_model
+        self.teacher_model.requires_grad_(False)
+
+
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        input = self(x) # log_softmax
+        target = self.teacher_model(x,requires_grad=False) #softmax
+        loss = F.kl_div(input, target)
+        self.log('train_loss', loss)
+        return loss
+
+    def evaluate(self, batch, stage=None):
+        x, y = batch
+        logits = self(x)
+        target = self.teacher_model(x,requires_grad=False)
+        loss = F.kl_div(logits, target)
+        preds = torch.argmax(logits, dim=1)
+        acc = accuracy(preds, y)
+    
+        if stage:
+            self.log(f'{stage}_loss', loss, prog_bar=True)
+            self.log(f'{stage}_acc', acc, prog_bar=True)
+
+    def validation_step(self, batch, batch_idx):
+        self.evaluate(batch, 'val')
+
+    def test_step(self, batch, batch_idx):
+        self.evaluate(batch, 'test')
+        
+    def on_train_batch_end(self, batch, batch_idx, unused):
+        if self.hparams.limit_conv_weight:
+            self.apply(limit_conv_weight)
+        if self.hparams.limit_bn_weight:
+            self.apply(limit_bn_weight)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(
+            self.parameters(),
+            lr=self.hparams.adam_init_lr,
+            betas=self.hparams.adam_betas,
+            weight_decay=self.hparams.adam_weight_decay,
+        )
+        scheduler_dict = {
+            'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer, 
+                mode='max', 
+                factor=self.hparams.lr_reduce_factor, 
+                patience=self.hparams.lr_patience,
+            ),
+            'interval': 'epoch',
+            'monitor': 'val_acc',
+        }
+        return {'optimizer': optimizer, 'lr_scheduler': scheduler_dict}    
+
+
+class DistributionLoss(loss._Loss):
+    """The KL-Divergence loss for the binary student model and real teacher output.
+    output must be a pair of (model_output, real_output), both NxC tensors.
+    The rows of real_output must all add up to one (probability scores);
+    however, model_output must be the pre-softmax output of the network."""
+
+    def forward(self, model_output, real_output):
+
+        self.size_average = True
+
+        # Target is ignored at training time. Loss is defined as KL divergence
+        # between the model output and the refined labels.
+        if real_output.requires_grad:
+            raise ValueError("real network output should not require gradients.")
+
+        model_output_log_prob = F.log_softmax(model_output, dim=1)
+        real_output_soft = F.softmax(real_output, dim=1)
+        del model_output, real_output
+
+        # Loss is -dot(model_output_log_prob, real_output). Prepare tensors
+        # for batch matrix multiplicatio
+        real_output_soft = real_output_soft.unsqueeze(1)
+        model_output_log_prob = model_output_log_prob.unsqueeze(2)
+
+        # Compute the loss, and average/sum for the batch.
+        cross_entropy_loss = -torch.bmm(real_output_soft, model_output_log_prob)
+        if self.size_average:
+             cross_entropy_loss = cross_entropy_loss.mean()
+        else:
+             cross_entropy_loss = cross_entropy_loss.sum()
+        # Return a pair of (loss_output, model_output). Model output will be
+        # used for top-1 and top-5 evaluation.
+        # model_output_log_prob = model_output_log_prob.squeeze(2)
+        return cross_entropy_loss
