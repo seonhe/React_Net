@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from torchmetrics.functional import accuracy
 from torch.nn.modules import loss
+torch.use_deterministic_algorithms(True)
 
 def limit_conv_weight(member):
     if type(member) == GeneralConv2d:
@@ -90,14 +91,15 @@ class firstconv3x3(nn.Module):
     def __init__(self, in_channels, out_channels, stride):
         super(firstconv3x3, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, stride, 1, bias=False)
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels)
+        self.rprelu = RPReLU(out_channels)
 
     def forward(self, x):
 
         out = self.conv1(x)
         out = self.bn1(out)
-
+        out = self.rprelu(out)
         return out
 
 
@@ -129,6 +131,86 @@ class GeneralConv2d(nn.Module):
     def __repr__(self):
         return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}, conv={self.conv})'    
 
+class DWConvReal(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.conv = conv
+        
+        self.depth = Block(in_channels=in_channels, out_channels=in_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
+        self.point = Block(in_channels=in_channels, out_channels=out_channels,kernel_size=1, stride=1, padding=0, conv=conv)
+        self.relu = nn.ReLU()
+        if stride > 1:
+            self.block = 'Reduction'
+        else:
+            self.block = 'Normal'
+
+    def forward(self, x):
+        out = self.depth(x)
+        out = self.relu(out)
+
+        out = self.point(out)
+        out = self.relu(out)
+
+        return out
+    
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, conv={self.conv}, block={self.block})' 
+
+
+class DWConvReact(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.conv = conv
+        self.depth = Block(in_channels=in_channels, out_channels=in_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
+        self.point = Block(in_channels=in_channels, out_channels=in_channels,kernel_size=1, stride=1, padding=0, conv=conv)
+        self.rprelu = RPReLU(in_channels)
+
+        if in_channels != out_channels:
+            self.block = 'Reduction'
+        else:
+            self.block = 'Normal'
+
+    def forward(self, x):
+        # block -> shortcut -> RPReLU -> block -> shortcut -> RPReLU -> (concatenate)
+        out = self.depth(x) # block
+        out = out + x # shortcut
+
+        out1 = self.rprelu(out) # RPReLU
+
+        out_1 = self.point(out1) # block
+        out = out_1 + out    #shortcut
+        out = self.rprelu(out) # RPReLU
+        
+        if self.block == 'reduction':
+            out_2 = self.point(out1) # block
+            out_2 = out_2 + out    # shortcut
+            out_2 = self.rprelu(out_2) # RPReLU
+            out = torch.cat([out, out_2],dim=1) # concatenate
+
+        return out
+    
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, conv={self.conv}, block={self.block})' 
+
+
+class Block(nn.Sequential):
+    def __init__(self,in_channels, out_channels, kernel_size, stride, padding, conv):
+        super().__init__()
+
+        if conv == 'scaled_sign':
+            self.add_layer(RSign(in_channels=in_channels))
+        ### conv + BN ###
+        self.add_layer(GeneralConv2d(in_channels=in_channels, out_channels=out_channels,kernel_size=kernel_size,stride=stride, padding=padding, conv=conv))
+        self.add_layer(nn.BatchNorm2d(out_channels))
+
+    def add_layer(self, layer):
+        self.add_module(layer.__class__.__name__, layer)
+
+
 
 class BinaryActivation(nn.Module):
     def __init__(self):
@@ -141,18 +223,18 @@ class BinaryActivation(nn.Module):
 
 class ReactBase(LightningModule):
     def __init__(self, 
-                 limit_conv_weight=True,
-                 limit_bn_weight=True,
                  adam_init_lr=0.01, 
                  adam_weight_decay=0,
                  adam_betas=(0.9, 0.999),
                  lr_reduce_factor=0.1,
                  lr_patience=50,
+                 limit_conv_weight=True,
+                 limit_bn_weight=True,
                 ):
         super().__init__()
         self.save_hyperparameters()
         # for logging the comp. graph
-        self.example_input_array = torch.ones((512, 3, 32, 32))
+        #self.example_input_array = torch.ones((512, 3, 32, 32))
 
     def training_step(self, batch, batch_idx):
         x, y = batch
