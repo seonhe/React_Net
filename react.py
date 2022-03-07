@@ -9,9 +9,11 @@ def limit_conv_weight(member):
     if type(member) == GeneralConv2d:
         member.weight.data.clamp_(-1., 1.)
 
+
 def limit_bn_weight(member):
     if type(member) == nn.BatchNorm2d:
         member.weight.data.abs_().clamp_(min=1e-2)
+
 
 class Clamp(nn.Module):
     def forward(self, x):
@@ -19,6 +21,7 @@ class Clamp(nn.Module):
     
     def __repr__(self):
         return f'{self.__class__.__name__}'
+
 
 class Shift(nn.Module):
     def __init__(self, in_channels):
@@ -46,6 +49,7 @@ class DifferentiableSign(torch.autograd.Function):
         mask, = ctx.saved_tensors
         return mask * grad_output    
 
+
 class Sign(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
@@ -57,7 +61,6 @@ class Sign(nn.Module):
 
     def __repr__(self):
         return f'{self.__class__.__name__}(in_channels={self.in_channels})'
-
 
 # RSign : shift + sign
 class RSign(nn.Module):
@@ -92,6 +95,7 @@ class RPReLU(nn.Module):
     
     def __repr__(self):
         return f'{self.__class__.__name__}(in_channels={self.in_channels})'
+
 
 class firstconv3x3(nn.Module):
     def __init__(self, in_channels, out_channels, stride,conv):
@@ -139,6 +143,17 @@ class GeneralConv2d(nn.Module):
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}, conv={self.conv})'    
+
+
+class DWConv(nn.Module):
+    def __init__(self, in_channels,out_channels, kernel_size, stride, padding, conv):
+        super().__init__()
+        self.normal = nn.Sequential(
+            GeneralConv2d(in_channels=in_channels, out_channels=in_channels,kernel_size=kernel_size,stride=stride, padding=padding, conv=conv),
+            nn.BatchNorm2d(in_channels),
+
+        )
+
 
 class DWConvReal(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
@@ -194,7 +209,7 @@ class DWConvReact(nn.Module):
         out = out_1 + out    #shortcut
         out = self.rprelu(out) # RPReLU
         
-        if self.block == 'reduction':
+        if self.block == 'Reduction':
             out_2 = self.point(out1) # block
             out_2 = out_2 + out    # shortcut
             out_2 = self.rprelu(out_2) # RPReLU
@@ -215,12 +230,10 @@ class Block(nn.Sequential):
         ### conv + BN ###
         self.add_layer(GeneralConv2d(in_channels=in_channels, out_channels=out_channels,kernel_size=kernel_size,stride=stride, padding=padding, conv=conv))
         self.add_layer(nn.BatchNorm2d(out_channels))
-        self.add_layer(Shift(in_channels=out_channels))
         self.add_layer(Clamp())
-
+        
     def add_layer(self, layer):
         self.add_module(layer.__class__.__name__, layer)
-
 
 
 class BinaryActivation(nn.Module):
@@ -230,7 +243,6 @@ class BinaryActivation(nn.Module):
     def forward(self, x):
         return DifferentiableSign.apply(x)
     
-
 
 class ReactBase(LightningModule):
     def __init__(self, 
