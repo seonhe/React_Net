@@ -18,10 +18,8 @@ def limit_bn_weight(member):
 class RSign(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, weight):
-
         grad_mask_input=(x.lt(1+weight)&x.ge(-1+weight)).type(torch.float32)
         ctx.save_for_backward(grad_mask_input)
-        
         return 2*torch.ge(x,weight).type(torch.float32)-1
     
     @staticmethod

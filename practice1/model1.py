@@ -10,6 +10,7 @@ from react1 import GeneralConv2d
 from react1 import Squeeze
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
 class Model(BCNNBase):
     def __init__(self, structure, **kwargs):
         super().__init__(**kwargs)        
@@ -32,7 +33,7 @@ class Model(BCNNBase):
 
     def forward(self, x):
         conv=GeneralConv2d(in_channels=3, out_channels=32,
-                        conv='scaled_sign', kernel_size=3, padding=1, stride=1)
+                        conv='real', kernel_size=3, padding=1, stride=1)
         x=conv(x)
         
         for idx, block in enumerate(self.blocks):
@@ -40,6 +41,37 @@ class Model(BCNNBase):
             
         return F.log_softmax(x, dim=1)
     
+class Block(nn.Sequential):
+    def __init__(self, 
+                 in_channels, 
+                 out_channels, 
+                 kernel_size1, kernel_size2,
+                 conv,
+                 stride1=1, stride2=1,
+                 padding1=1, padding2=1,
+                 dropout=0):
+      super().__init__()
+       
+      if(in_channels==out_channels):
+        self.add_layer(Normal_Block(in_channels=self.in_channels, 
+                 out_channels=self.out_channels, 
+                 kernel_size1=self.kernel_size1, kernel_size2=self.kernel_size2,
+                 conv=self.conv,
+                 stride1=self.stride1, stride2=self.stride2,
+                 padding1=self.padding1, padding2=self.padding2,
+                 dropout=self.dropout))
+      else:
+          self.add_layer(Reduction_Block(in_channels=self.in_channels, 
+                 out_channels=self.out_channels, 
+                 kernel_size1=self.kernel_size1, kernel_size2=self.kernel_size2,
+                 conv=self.conv,
+                 stride1=self.stride1, stride2=self.stride2,
+                 padding1=self.padding1, padding2=self.padding2,
+                 dropout=self.dropout))
+          
+    def add_layer(self, layer):
+        self.add_module(layer.__class__.__name__, layer)
+'''    
 class Block(nn.Module):
     def __init__(self, 
                  in_channels, 
@@ -80,7 +112,7 @@ class Block(nn.Module):
                  dropout=self.dropout) 
 
       return block(x)
-      
+'''      
 
 class Normal_Block(nn.Sequential):
     def __init__(self, 
