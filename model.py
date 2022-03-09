@@ -71,10 +71,13 @@ class ReactModel(ReactBase):
                             out_channels=structure[i]['out_channels'],
                             conv='scaled_sign',
                             kernel_size=1,
-                            stride=structure[-1]['stride'],
-                            padding=structure[-1]['padding'],
+                            stride=structure[i]['stride'],
+                            padding=structure[i]['padding'],
                         )
                     )
+
+                    self.blocks.append(nn.Dropout(structure[i]['dropout']))
+
                     
 
         self.blocks.append(
@@ -87,11 +90,13 @@ class ReactModel(ReactBase):
                     padding=0,
                 )
         )
-        self.blocks.append(nn.Dropout(structure[i]['dropout']))
+
+        self.blocks.append(nn.Dropout(structure[-1]['dropout']))
 
 
     def forward(self, x):
         for idx, block in enumerate(self.blocks):
+            #print(idx, "xshape", x.shape)
             x = block(x)
         return F.log_softmax(x.squeeze(dim=2).squeeze(dim=2), dim=1)
 

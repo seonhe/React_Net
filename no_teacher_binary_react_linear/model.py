@@ -71,8 +71,8 @@ class ReactModel(ReactBase):
                             out_channels=structure[i]['out_channels'],
                             conv='scaled_sign',
                             kernel_size=1,
-                            stride=structure[-1]['stride'],
-                            padding=structure[-1]['padding'],
+                            stride=structure[i]['stride'],
+                            padding=structure[i]['padding'],
                         )
                     )
                     
