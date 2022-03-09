@@ -39,27 +39,19 @@ class BasicBlock(nn.Sequential):
                  dropout=0):
         super().__init__()
         
-        self.add_layer(depthwise_separable_conv(nin=in_channels, nout=out_channels, kernel_size=3, kernels_per_layer=1)                    
-            
-        self.add_layer(nn.BatchNorm2d(out_channels, affine=True))
-        
-        if act_fn == 'sign':
-            self.add_layer(Shift(out_channels=out_channels))
-            self.add_layer(Clamp())
-            self.add_layer(BinaryActivation())
-        elif act_fn == 'relu':
+        if (in_channels > 3)&(in_channels<1024):
+            self.add_layer(depthwise_separable_conv(nin=in_channels, nout=in_channels, kernel_size=3, kernels_per_layer=1))                 
+            self.add_layer(nn.BatchNorm2d(in_channels, affine=True))
+            self.add_layer(nn.ReLU())
+
+        elif in_channels==1024:
+            self.add_layer(depthwise_separable_conv(nin=in_channels, nout=in_channels, kernel_size=1, kernels_per_layer=1))                 
+            self.add_layer(nn.BatchNorm2d(in_channels, affine=True))
             self.add_layer(nn.ReLU())
         
         self.add_layer(GeneralConv2d(in_channels=in_channels, out_channels=out_channels, padding=padding, stride=stride, kernel_size=kernel_size, conv=conv))                    
-            
         self.add_layer(nn.BatchNorm2d(out_channels, affine=True))
-        
-        if act_fn == 'sign':
-            self.add_layer(Shift(out_channels=out_channels))
-            self.add_layer(Clamp())
-            self.add_layer(BinaryActivation())
-        elif act_fn == 'relu':
-            self.add_layer(nn.ReLU())
+        self.add_layer(nn.ReLU())
             
         if dropout > 0:
             self.add_layer(nn.Dropout(dropout))
