@@ -13,7 +13,8 @@ class Model(BCNNBase):
             BasicBlock(in_channels=structure[i]['in_channels'],
                        out_channels=structure[i]['out_channels'],
                        kernel_size=structure[i]['kernel_size'],
-                       stride=structure[i]['stride'],
+                       stride=structure[i]['stride1'],
+                       tride=structure[i]['stride2'],
                        padding=structure[i]['padding'],
                        act_fn=structure[i]['act_fn'],
                        conv=structure[i]['conv'],
@@ -33,23 +34,23 @@ class BasicBlock(nn.Sequential):
                  out_channels, 
                  kernel_size, 
                  conv,
-                 stride=1, 
+                 stride1=1, stride2=1, 
                  padding=1, 
                  act_fn='relu',
                  dropout=0):
         super().__init__()
         
         if (in_channels > 3)&(in_channels<1024):
-            self.add_layer(depthwise_separable_conv(nin=in_channels, nout=in_channels, kernel_size=3, kernels_per_layer=1))                 
+            self.add_layer(depthwise_separable_conv(nin=in_channels, nout=in_channels, kernel_size=3, kernels_per_layer=1, stride=stride1))                 
             self.add_layer(nn.BatchNorm2d(in_channels, affine=True))
             self.add_layer(nn.ReLU())
 
-        elif in_channels==1024:
-            self.add_layer(depthwise_separable_conv(nin=in_channels, nout=in_channels, kernel_size=1, kernels_per_layer=1))                 
+        elif (in_channels==1024)&(dropout==0):
+            self.add_layer(depthwise_separable_conv(nin=in_channels, nout=in_channels, kernel_size=1, kernels_per_layer=1, stride=stride1))                 
             self.add_layer(nn.BatchNorm2d(in_channels, affine=True))
             self.add_layer(nn.ReLU())
         
-        self.add_layer(GeneralConv2d(in_channels=in_channels, out_channels=out_channels, padding=padding, stride=stride, kernel_size=kernel_size, conv=conv))                    
+        self.add_layer(GeneralConv2d(in_channels=in_channels, out_channels=out_channels, padding=padding, stride=stride2, kernel_size=kernel_size, conv=conv))                    
         self.add_layer(nn.BatchNorm2d(out_channels, affine=True))
         self.add_layer(nn.ReLU())
             

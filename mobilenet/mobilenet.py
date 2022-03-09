@@ -57,7 +57,7 @@ class GeneralConv2d(nn.Module):
 class depthwise_separable_conv(nn.Module):
     def __init__(self, nin, nout, kernel_size=3, kernels_per_layer=1):
       super(depthwise_separable_conv, self).__init__()
-      self.depthwise = nn.Conv2d(nin, nin * kernels_per_layer, kernel_size=kernel_size, padding=1, groups=nin)
+      self.depthwise = nn.Conv2d(nin, nin * kernels_per_layer, kernel_size=kernel_size, padding=1, groups=nin, stride=1)
       self.pointwise = nn.Conv2d(nin * kernels_per_layer, nout, kernel_size=1)
 
     def forward(self, x):
