@@ -41,31 +41,6 @@ class QuadraticSign(torch.autograd.Function):
         return mask * grad_output
     
 
-class ReAct_Sign(nn.Module):
-    def __init__(self, in_channels):
-        super().__init__()
-        self.shift=Shift(in_channels=in_channels)
-        
-    def forward(self,x):
-        y=self.shift(x)
-        y=QuadraticSign.apply(y)
-        return y
-
-    
-class ReAct_Relu(nn.Module):
-    def __init__(self, in_channels):
-        super().__init__()
-        self.shift1=Shift(in_channels=in_channels)
-        self.prelu=nn.PReLU(num_parameters=in_channels)
-        self.shift2=Shift(in_channels=in_channels)
-    
-    def forward(self, x):
-        y=self.shift1(x)
-        y=self.prelu(y)
-        y=self.shift2(y)
-
-        return y
-
 class Squeeze(nn.Module):
     def __init__(self):
         super().__init__()
@@ -114,7 +89,7 @@ class GeneralConv2d(nn.Module):
     def __repr__(self):
         return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, stride=1, padding={self.padding}, conv={self.conv})'    
 
-class React_Base(LightningModule):
+class Baseline_Base(LightningModule):
     def __init__(self, 
                  limit_conv_weight=True,
                  limit_bn_weight=True,
