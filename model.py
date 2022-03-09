@@ -23,7 +23,7 @@ class ReactModel(ReactBase):
         super().__init__(structure, kwargs)        
         self.blocks = nn.ModuleList()
 
-        for i in range(len(structure)):
+        for i in range(len(structure)-1):
             if i == 0:
                 self.blocks.append(firstconv3x3( # conv + bn
                 in_channels=structure[i]['in_channels'],
@@ -64,12 +64,35 @@ class ReactModel(ReactBase):
                         )
                     )
 
-        
+                elif structure[i]['conv'] == 'fc':
+                    self.blocks.append(
+                        GeneralConv2d(
+                            in_channels=structure[i]['in_channels'],
+                            out_channels=structure[i]['out_channels'],
+                            conv='scaled_sign',
+                            kernel_size=1,
+                            stride=structure[-1]['stride'],
+                            padding=structure[-1]['padding'],
+                        )
+                    )
+                    
+
+        self.blocks.append(
+            GeneralConv2d(
+                    in_channels=structure[-1]['in_channels'],
+                    out_channels=structure[-1]['out_channels'],
+                    conv='real',
+                    kernel_size=structure[-1]['kernel_size'],
+                    stride=1,
+                    padding=0,
+                )
+        )
+        self.blocks.append(nn.Dropout(structure[i]['dropout']))
 
 
     def forward(self, x):
         for idx, block in enumerate(self.blocks):
-            x = block(x)            
+            x = block(x)
         return F.log_softmax(x.squeeze(dim=2).squeeze(dim=2), dim=1)
 
 

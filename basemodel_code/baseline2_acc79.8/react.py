@@ -138,7 +138,7 @@ class GeneralConv2d(nn.Module):
         return y
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}, conv={self.conv})'    
+        return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}, conv={self.conv})'
 
 class DWConvReal(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
@@ -215,8 +215,8 @@ class Block(nn.Sequential):
         ### conv + BN ###
         self.add_layer(GeneralConv2d(in_channels=in_channels, out_channels=out_channels,kernel_size=kernel_size,stride=stride, padding=padding, conv=conv))
         self.add_layer(nn.BatchNorm2d(out_channels))
-        self.add_layer(Shift(in_channels=out_channels))
-        self.add_layer(Clamp())
+        #self.add_layer(Shift(in_channels=out_channels))
+        #self.add_layer(Clamp())
 
     def add_layer(self, layer):
         self.add_module(layer.__class__.__name__, layer)

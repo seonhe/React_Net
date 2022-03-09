@@ -191,7 +191,10 @@ class DWConvReact(nn.Module):
         self.conv = conv
         self.depth = Block(in_channels=in_channels, out_channels=in_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
         self.point = Block(in_channels=in_channels, out_channels=in_channels,kernel_size=1, stride=1, padding=0, conv=conv)
-        self.rprelu = RPReLU(in_channels)
+        self.rprelu11 = RPReLU(in_channels)
+        self.rprelu21 = RPReLU(in_channels)
+        self.rprelu22 = RPReLU(in_channels)
+        self.pool = nn.AvgPool2d(kernel_size=2)
 
         if stride > 1:
             self.block = 'Reduction'
@@ -201,18 +204,20 @@ class DWConvReact(nn.Module):
     def forward(self, x):
         # block -> shortcut -> RPReLU -> block -> shortcut -> RPReLU -> (concatenate)
         out = self.depth(x) # block
+        
+        if self.block == 'Reduction':
+            x = self.pool(x)
         out = out + x # shortcut
-
-        out1 = self.rprelu(out) # RPReLU
+        out1 = self.rprelu11(out) # RPReLU
 
         out_1 = self.point(out1) # block
         out = out_1 + out    #shortcut
-        out = self.rprelu(out) # RPReLU
+        out = self.rprelu21(out) # RPReLU
         
         if self.block == 'Reduction':
             out_2 = self.point(out1) # block
             out_2 = out_2 + out    # shortcut
-            out_2 = self.rprelu(out_2) # RPReLU
+            out_2 = self.rprelu22(out_2) # RPReLU
             out = torch.cat([out, out_2],dim=1) # concatenate
 
         return out
@@ -230,7 +235,6 @@ class Block(nn.Sequential):
         ### conv + BN ###
         self.add_layer(GeneralConv2d(in_channels=in_channels, out_channels=out_channels,kernel_size=kernel_size,stride=stride, padding=padding, conv=conv))
         self.add_layer(nn.BatchNorm2d(out_channels))
-        self.add_layer(Clamp())
         
     def add_layer(self, layer):
         self.add_module(layer.__class__.__name__, layer)
