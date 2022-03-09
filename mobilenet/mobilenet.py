@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from torchmetrics.functional import accuracy
 
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
 def limit_conv_weight(member):
     if type(member) == GeneralConv2d:
         member.weight.data.clamp_(-1., 1.)
@@ -55,16 +57,53 @@ class GeneralConv2d(nn.Module):
 
 
 class depthwise_separable_conv(nn.Module):
-    def __init__(self, nin, nout, kernel_size=3, kernels_per_layer=1):
+    def __init__(self, nin, nout, kernel_size=3, kernels_per_layer=1, stride=1):
       super(depthwise_separable_conv, self).__init__()
-      self.depthwise = nn.Conv2d(nin, nin * kernels_per_layer, kernel_size=kernel_size, padding=1, groups=nin, stride=1)
+      self.depthwise = nn.Conv2d(nin, nin * kernels_per_layer, kernel_size=kernel_size, padding=1, groups=nin, stride=stride)
       self.pointwise = nn.Conv2d(nin * kernels_per_layer, nout, kernel_size=1)
 
     def forward(self, x):
       out = self.depthwise(x)
       out = self.pointwise(out)
       return out
-  
+
+class BatchNorm1(nn.Module):
+    def __init__(self, in_channels,):
+      super(BatchNorm1, self).__init__()
+      self.in_channels=in_channels
+   
+    def forward(self, x):
+      bn=nn.BatchNorm2d(num_features=self.in_channels, affine=True).to(device)
+      out=bn(x)
+      return out
+
+class BatchNorm2(nn.Module):
+    def __init__(self, in_channels,):
+      super(BatchNorm2, self).__init__()
+      self.in_channels=in_channels
+   
+    def forward(self, x):
+      bn=nn.BatchNorm2d(num_features=self.in_channels, affine=True).to(device)
+      out=bn(x)
+      return out
+
+class ReLU1(nn.Module):
+    def __init__(self,):
+      super(ReLU1, self).__init__()
+   
+    def forward(self, x):
+      relu=nn.ReLU()
+      out=relu(x)
+      return out
+
+class ReLU2(nn.Module):
+    def __init__(self,):
+      super(ReLU2, self).__init__()
+   
+    def forward(self, x):
+      relu=nn.ReLU()
+      out=relu(x)
+      return out
 
 class BCNNBase(LightningModule):
     def __init__(self, 
@@ -91,6 +130,7 @@ class BCNNBase(LightningModule):
     def evaluate(self, batch, stage=None):
         x, y = batch
         logits = self(x)
+        print(logits.shape)
         loss = F.nll_loss(logits, y)
         preds = torch.argmax(logits, dim=1)
         acc = accuracy(preds, y)
