@@ -139,7 +139,7 @@ class React_Base(LightningModule):
     def evaluate(self, batch, stage=None):
         x, y = batch
         logits = self(x)
-        print(logits.shape)
+ 
         loss = F.nll_loss(logits, y)
         preds = torch.argmax(logits, dim=1)
         acc = accuracy(preds, y)
