@@ -4,12 +4,10 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 
 
-from react import RSign
-from react import GeneralConv2d
+
+from react import Conv
 from react import ReactBase
-from react import firstconv3x3
 from react import DWConvReact
-from react import DWConvReal
 torch.use_deterministic_algorithms(True)
 
 
@@ -23,29 +21,19 @@ class ReactModel(ReactBase):
         super().__init__(structure, kwargs)        
         self.blocks = nn.ModuleList()
 
-        for i in range(len(structure)-1):
+        for i in range(len(structure)):
             if i == 0:
-                self.blocks.append(firstconv3x3( # conv + bn
-                in_channels=structure[i]['in_channels'],
-                out_channels=structure[i]['out_channels'],
-                stride=structure[i]['stride'],
-                conv=structure[i]['conv']
-                )
-            )
-            else:
-                if structure[i]['conv'] == 'real': # Real block
-                    self.blocks.append(
-                        DWConvReal(
+                self.blocks.append(Conv( # conv + bn
                             in_channels=structure[i]['in_channels'],
                             out_channels =structure[i]['out_channels'],
                             kernel_size=structure[i]['kernel_size'],
                             stride=structure[i]['stride'],
                             padding=structure[i]['padding'],
                             conv=structure[i]['conv']
-                        )
                     )
-
-                elif structure[i]['conv'] == 'scaled_sign': # scaled.block
+                )
+            else:
+                if (structure[i]['conv'] == 'scaled_sign')|(structure[i]['conv'] == 'real'): # scaled.block
                     self.blocks.append(
                         DWConvReact(
                             in_channels=structure[i]['in_channels'],
@@ -66,27 +54,16 @@ class ReactModel(ReactBase):
 
                 elif structure[i]['conv'] == 'fc':
                     self.blocks.append(
-                        GeneralConv2d(
+                        Conv(
                             in_channels=structure[i]['in_channels'],
-                            out_channels=structure[i]['out_channels'],
-                            conv='scaled_sign',
-                            kernel_size=1,
+                            out_channels =structure[i]['out_channels'],
+                            kernel_size=structure[i]['kernel_size'],
                             stride=structure[i]['stride'],
                             padding=structure[i]['padding'],
+                            conv=structure[i]['conv'],
                         )
                     )
                     
-
-        self.blocks.append(
-            GeneralConv2d(
-                    in_channels=structure[-1]['in_channels'],
-                    out_channels=structure[-1]['out_channels'],
-                    conv='real',
-                    kernel_size=structure[-1]['kernel_size'],
-                    stride=1,
-                    padding=0,
-                )
-        )
         self.blocks.append(nn.Dropout(structure[i]['dropout']))
 
 
