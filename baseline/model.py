@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 
-from react2 import Baseline_Base
-from react2 import QuadraticSign
-from react2 import GeneralConv2d
+from baseline import Baseline_Base
+from baseline import QuadraticSign
+from baseline import GeneralConv2d
 
 
 class Model(Baseline_Base):

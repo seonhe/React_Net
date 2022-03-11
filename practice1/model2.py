@@ -17,7 +17,7 @@ class Model(React_Base):
             BasicBlock(in_channels=structure[i]['in_channels'],
                        out_channels=structure[i]['out_channels'],
                        kernel_size=structure[i]['kernel_size'],
-                       stride1=structure[i]['stride'],
+                       stride=structure[i]['stride'],
                        padding=structure[i]['padding'],
                        act_fn=structure[i]['act_fn'],
                        conv=structure[i]['conv'],
@@ -36,11 +36,17 @@ class BasicBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, act_fn, conv, dropout):
         super(BasicBlock, self).__init__()
        
-        self.sign1 = ReAct_Sign(in_channels=in_channels)
-        self.binary_3x3= GeneralConv2d(in_channels=in_channels, out_channels=in_channels, stride=stride, kernel_size=kernel_size, padding=padding, conv=conv)
-        self.batchnorm1=nn.BatchNorm2d(num_features=in_channels)
-        
-        self.relu1=ReAct_Relu(in_channels=in_channels)
+        if ((in_channels == 3)|(in_channels == 1024)):
+            self.sign1 = ReAct_Sign(in_channels=in_channels)
+            self.binary_3x3= GeneralConv2d(in_channels=in_channels, out_channels=out_channels, stride=stride, kernel_size=kernel_size, padding=padding, conv=conv)
+            self.batchnorm1=nn.BatchNorm2d(num_features=out_channels)
+            self.relu1=ReAct_Relu(in_channels=out_channels)
+        else:
+            self.sign1 = ReAct_Sign(in_channels=in_channels)
+            self.binary_3x3= GeneralConv2d(in_channels=in_channels, out_channels=in_channels, stride=stride, kernel_size=kernel_size, padding=padding, conv=conv)
+            self.batchnorm1=nn.BatchNorm2d(num_features=in_channels)
+            self.relu1=ReAct_Relu(in_channels=in_channels)
+            
 
         if in_channels == out_channels:
             self.sign2 = ReAct_Sign(in_channels=in_channels)
@@ -70,7 +76,7 @@ class BasicBlock(nn.Module):
     def forward(self, x):
         out0=x
         
-        if (self.in_channels==1024)|(self.out_channels):
+        if (self.in_channels==1024)|(self.out_channels==1024):
             out1=self.sign1(out0)
             out1=self.binary_3x3(out1)
             out3=self.batchnorm1(out1)
