@@ -16,10 +16,10 @@ def limit_bn_weight(member):
         member.weight.data.abs_().clamp_(min=1e-2)
 
 class Shift(nn.Module):
-    def __init__(self, out_channels):
+    def __init__(self, in_channels):
         super().__init__()
-        self.bias = nn.Parameter(torch.zeros(1, out_channels, 1, 1), requires_grad=True)
-        self.out_channels = out_channels
+        self.bias = nn.Parameter(torch.zeros(1, in_channels, 1, 1), requires_grad=True)
+        self.out_channels = in_channels
 
     def forward(self, x):
         out = x + self.bias.expand_as(x)

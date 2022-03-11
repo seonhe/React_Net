@@ -9,7 +9,7 @@ from react2 import ReAct_Relu
 from react2 import GeneralConv2d
 from react2 import Squeeze
 
-
+'''
 class Model(React_Base):
     def __init__(self, structure, **kwargs):
         super().__init__(**kwargs)        
@@ -29,9 +29,159 @@ class Model(React_Base):
         for idx, block in enumerate(self.blocks):
             x = block(x)
             print(x.shape)            
+        return F.log_softmax(x.squeeze(dim=2).squeeze(dim=2), dim=1)'''
+        
+class Model(React_Base):
+    def __init__(self, structure, **kwargs):
+        super().__init__(**kwargs)
+        self.blocks=nn.Modulelist([])
+        
+        for i in range(len(structure)):
+            if(structure[i]['in_channels']==3)|(structure[i]['out_channels']==10):
+                self.blocks.append(ConvBlock(
+                        in_channels=structure[i]['in_channels'],
+                       out_channels=structure[i]['out_channels'],
+                       kernel_size=structure[i]['kernel_size'],
+                       stride=structure[i]['stride'],
+                       padding=structure[i]['padding'],
+                       act_fn=structure[i]['act_fn'],
+                       conv=structure[i]['conv'],
+                       dropout=structure[i]['dropout']))
+                
+            elif(structure[i]['in_channels']==structure[i]['out_channels']):
+                self.blocks.append(Normal_Block(
+                        in_channels=structure[i]['in_channels'],
+                       out_channels=structure[i]['out_channels'],
+                       kernel_size=structure[i]['kernel_size'],
+                       stride=structure[i]['stride'],
+                       padding=structure[i]['padding'],
+                       act_fn=structure[i]['act_fn'],
+                       conv=structure[i]['conv'],
+                       dropout=structure[i]['dropout']))
+                
+            else:
+                self.blocks.append(Reduction_Block(
+                        in_channels=structure[i]['in_channels'],
+                       out_channels=structure[i]['out_channels'],
+                       kernel_size=structure[i]['kernel_size'],
+                       stride=structure[i]['stride'],
+                       padding=structure[i]['padding'],
+                       act_fn=structure[i]['act_fn'],
+                       conv=structure[i]['conv'],
+                       dropout=structure[i]['dropout']))
+                
+    def forward(self, x):
+        for idx, block in enumerate(self.blocks):
+            x = block(x)
+            print(x.shape)            
         return F.log_softmax(x.squeeze(dim=2).squeeze(dim=2), dim=1)
+    
+class ConvBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, act_fn, conv, dropout):
+        super(ConvBlock, self).__init__()
+        self.binary_3x3= GeneralConv2d(in_channels=in_channels, out_channels=out_channels, stride=stride, kernel_size=kernel_size, padding=padding, conv=conv)
+        self.batchnorm=nn.BatchNorm2d(num_features=out_channels)
+        
+        self.dropout=nn.Dropout(dropout)
+        
+    def forward(self,x):
+        out=self.binary_3x3(x)
+        out3=self.batchnorm(out)
+        
+        out3=self.dropout(out3)
+        return out3
+    
+class Normal_Block(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, act_fn, conv, dropout):
+        super(Normal_Block, self).__init__() 
+        self.sign1 = ReAct_Sign(in_channels=in_channels)
+        self.binary_3x3= GeneralConv2d(in_channels=in_channels, out_channels=in_channels, stride=stride, kernel_size=kernel_size, padding=padding, conv=conv)
+        self.batchnorm1=nn.BatchNorm2d(num_features=in_channels)
+        self.relu1=ReAct_Relu(in_channels=in_channels)
+        
+        self.sign2 = ReAct_Sign(in_channels=in_channels)
+        self.binary_1x1= GeneralConv2d(in_channels=in_channels, out_channels=out_channels, stride=1, kernel_size=1, padding=0, conv='scaled sign')
+        self.batchnorm2=nn.BatchNorm2d(num_features=out_channels)
+        self.relu2=ReAct_Relu(in_channels=out_channels)
+        
+        self.dropout=nn.Dropout(dropout)
+        
+    def forward(self,x):
+        out0=x
+        
+        out1=self.sign1(out0)
+        out1=self.binary_3x3(out1)
+        out1=self.batchnorm1(out1)
+        
+        out1=out1+out0
+        out1=self.relu1(out1)
+        
+        out2=self.sign2(out1)
+        out2=self.binary_1x1(out2)
+        out2=self.batchnorm2(out2)
+        out2=out2+out1
+        
+        out3=self.relu2(out2)
+        out3=self.dropout(out3)
+        
+        return out3
+        
+        
+class Reduction_Block(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, act_fn, conv, dropout):
+        super(Reduction_Block, self).__init__()
+        
+        self.sign1 = ReAct_Sign(in_channels=in_channels)
+        self.binary_3x3= GeneralConv2d(in_channels=in_channels, out_channels=in_channels, stride=stride, kernel_size=kernel_size, padding=padding, conv=conv)
+        self.batchnorm1=nn.BatchNorm2d(num_features=in_channels)
+        self.relu1=ReAct_Relu(in_channels=in_channels)
+        self.pooling = nn.AvgPool2d(2,2)
+        
+        self.sign2_1 = ReAct_Sign(in_channels=in_channels)
+        self.sign2_2 = ReAct_Sign(in_channels=in_channels)
+            
+        self.binary_1x1_1= GeneralConv2d(in_channels=in_channels, out_channels=in_channels, stride=1, kernel_size=1, padding=0, conv='scaled sign')
+        self.binary_1x1_2= GeneralConv2d(in_channels=in_channels, out_channels=in_channels, stride=1, kernel_size=1, padding=0, conv='scaled sign')
+            
+        self.batchnorm2_1=nn.BatchNorm2d(num_features=in_channels)
+        self.batchnorm2_2=nn.BatchNorm2d(num_features=in_channels)
+            
+        self.relu2_1=ReAct_Relu(in_channels=in_channels)
+        self.relu2_2=ReAct_Relu(in_channels=in_channels)
+
+        self.dropout=nn.Dropout(dropout)
+        
+    def forward(self,x):
+        out0=x
+        
+        out1_1=self.sign1(out0)
+        out1_1=self.binary_3x3(out1_1)
+        out1_1=self.batchnorm1(out1_1)
+        
+        out1_2=self.pooling(out0)
+        out1=out1_1+out1_2
+        out1=self.relu1(out1)
+        
+        out2_1=self.sign2_1(out1)
+        out2_1=self.binary_1x1_1(out2_1)
+        out2_1=self.batchnorm2_1(out2_1)
+        out2_1=out2_1+out1
+        out2_1=self.relu2_1(out2_1)
+        
+        out2_2=self.sign2_2(out1)
+        out2_2=self.binary_1x1_2(out2_2)
+        out2_2=self.batchnorm2_2(out2_2)
+        out2_2=out2_2+out1
+        out2_2=self.relu2_2(out2_2)
+        
+        out3 = torch.cat([out2_1, out2_2], dim=1)
+                
+        out3=self.dropout(out3)
+        
+        return out3
 
 
+'''
 class BasicBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, act_fn, conv, dropout):
         super(BasicBlock, self).__init__()
@@ -117,3 +267,4 @@ class BasicBlock(nn.Module):
                 
         out3=self.dropout(out3)
         return out3
+'''
