@@ -183,6 +183,8 @@ class Block(nn.Sequential):
 
         if conv == 'scaled_sign':
             self.add_layer(RSign(in_channels=in_channels))
+        else:
+            self.add_layer(Shift(in_channels))
         ### conv + BN ###
         self.add_layer(GeneralConv2d(in_channels=in_channels, out_channels=out_channels,kernel_size=kernel_size,stride=stride, padding=padding, conv=conv))
         self.add_layer(nn.BatchNorm2d(out_channels))
