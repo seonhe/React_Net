@@ -13,6 +13,19 @@ def limit_conv_weight(member):
 def limit_bn_weight(member):
     if type(member) == nn.BatchNorm2d:
         member.weight.data.abs_().clamp_(min=1e-2)
+        
+
+class DifferentiableSign(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        grad_mask = (input.lt(1) & input.ge(-1)).type(torch.float32)        
+        ctx.save_for_backward(grad_mask)
+        return 2 * torch.gt(input, 0).type(torch.float32) - 1
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        mask, = ctx.saved_tensors
+        return mask * grad_output    
 
 
 class Clamp(nn.Module):
@@ -35,32 +48,7 @@ class Shift(nn.Module):
     
     def __repr__(self):
         return f'{self.__class__.__name__}(in_channels={self.in_channels})'
-
-    
-class QuadraticSign(torch.autograd.Function):
-    @staticmethod      
-    def forward(ctx, input):
-        grad_mask = ((input.lt(0) & input.ge(-1))*(2*input+2)+(input.lt(1) & input.ge(0))*(-2*input+2)).type(torch.float32)
-        ctx.save_for_backward(grad_mask)                               
-        return 2 * torch.ge(input, 0).type(torch.float32) - 1          
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        mask, = ctx.saved_tensors  
-        return mask * grad_output    
-
-
-class Sign(nn.Module):
-    def __init__(self, in_channels):
-        super().__init__()
-        self.in_channels = in_channels
-
-    def forward(self, x):
-        out = QuadraticSign(self.in_channels).apply(x)
-        return out
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}(in_channels={self.in_channels})'
+  
 
 # RSign : shift + sign
 class RSign(nn.Module):
@@ -68,11 +56,10 @@ class RSign(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         self.shift = Shift(self.in_channels)
-        self.sign = Sign(self.in_channels)
         
     def forward(self, x):
         out = self.shift(x)
-        out = self.sign(out)
+        out = DifferentiableSign.apply(out)
         return out
 
     def __repr__(self):
@@ -97,24 +84,6 @@ class RPReLU(nn.Module):
         return f'{self.__class__.__name__}(in_channels={self.in_channels})'
 
 
-class firstconv3x3(nn.Module):
-    def __init__(self, in_channels, out_channels, stride,conv):
-        super(firstconv3x3, self).__init__()
-
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        if conv == 'real':
-            self.relu = nn.ReLU()
-        else:
-            self.relu = RPReLU(in_channels)
-
-    def forward(self, x):
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        return out
-
 
 class GeneralConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, conv, kernel_size=3, stride=1, padding=1):
@@ -134,9 +103,9 @@ class GeneralConv2d(nn.Module):
         real_weights = self.weight.view(self.shape)
         if self.conv == 'scaled_sign':
             scaling_factor = torch.mean(torch.mean(torch.mean(abs(real_weights),dim=3,keepdim=True),dim=2,keepdim=True),dim=1,keepdim=True)
-            y = F.conv2d(x, scaling_factor * QuadraticSign.apply(real_weights), stride=self.stride, padding=self.padding)
+            y = F.conv2d(x, scaling_factor * DifferentiableSign.apply(real_weights), stride=self.stride, padding=self.padding)
         elif self.conv == 'sign':
-            y = F.conv2d(x, QuadraticSign.apply(real_weights), stride=self.stride, padding=self.padding)
+            y = F.conv2d(x, DifferentiableSign.apply(real_weights), stride=self.stride, padding=self.padding)
         else: # real
             y = F.conv2d(x, real_weights, stride=self.stride, padding=self.padding)        
         return y
@@ -145,42 +114,23 @@ class GeneralConv2d(nn.Module):
         return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}, conv={self.conv})'    
 
 
-class DWConv(nn.Module):
-    def __init__(self, in_channels,out_channels, kernel_size, stride, padding, conv):
-        super().__init__()
-        self.normal = nn.Sequential(
-            GeneralConv2d(in_channels=in_channels, out_channels=in_channels,kernel_size=kernel_size,stride=stride, padding=padding, conv=conv),
-            nn.BatchNorm2d(in_channels),
-
-        )
-
-
-class DWConvReal(nn.Module):
+class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
         super().__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.conv = conv
-        
-        self.depth = Block(in_channels=in_channels, out_channels=in_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
-        self.point = Block(in_channels=in_channels, out_channels=out_channels,kernel_size=1, stride=1, padding=0, conv=conv)
-        self.relu = nn.ReLU()
-        if stride > 1:
-            self.block = 'Reduction'
-        else:
-            self.block = 'Normal'
-
+        self.block = Block(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
+        if(conv!='fc'):
+            self.relu = nn.ReLU()
+        self.conv=conv
+         
     def forward(self, x):
-        out = self.depth(x)
-        out = self.relu(out)
-
-        out = self.point(out)
-        out = self.relu(out)
-
+        out=self.block(x)
+        
+        if self.conv!='fc':
+            out=self.relu(out)          
+        
         return out
-    
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, conv={self.conv}, block={self.block})' 
+
+
 
 
 class DWConvReact(nn.Module):
@@ -190,7 +140,8 @@ class DWConvReact(nn.Module):
         self.out_channels = out_channels
         self.conv = conv
         self.depth = Block(in_channels=in_channels, out_channels=in_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
-        self.point = Block(in_channels=in_channels, out_channels=in_channels,kernel_size=1, stride=1, padding=0, conv=conv)
+        self.point1 = Block(in_channels=in_channels, out_channels=in_channels,kernel_size=1, stride=1, padding=0, conv=conv)
+        self.point2 = Block(in_channels=in_channels, out_channels=in_channels,kernel_size=1, stride=1, padding=0, conv=conv)
         self.rprelu11 = RPReLU(in_channels)
         self.rprelu21 = RPReLU(in_channels)
         self.rprelu22 = RPReLU(in_channels)
@@ -210,12 +161,12 @@ class DWConvReact(nn.Module):
         out = out + x # shortcut
         out1 = self.rprelu11(out) # RPReLU
 
-        out_1 = self.point(out1) # block
+        out_1 = self.point1(out1) # block
         out = out_1 + out    #shortcut
         out = self.rprelu21(out) # RPReLU
         
         if self.block == 'Reduction':
-            out_2 = self.point(out1) # block
+            out_2 = self.point2(out1) # block
             out_2 = out_2 + out    # shortcut
             out_2 = self.rprelu22(out_2) # RPReLU
             out = torch.cat([out, out_2],dim=1) # concatenate
@@ -245,7 +196,7 @@ class BinaryActivation(nn.Module):
         super(BinaryActivation, self).__init__()
 
     def forward(self, x):
-        return QuadraticSign.apply(x)
+        return DifferentiableSign.apply(x)
     
 
 class ReactBase(LightningModule):

@@ -13,6 +13,7 @@ def limit_conv_weight(member):
 def limit_bn_weight(member):
     if type(member) == nn.BatchNorm2d:
         member.weight.data.abs_().clamp_(min=1e-2)
+    
 
 
 class Clamp(nn.Module):
@@ -117,7 +118,8 @@ class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
         super().__init__()
         self.block = Block(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
-        self.relu = nn.ReLU()
+        if(conv!='fc'):
+            self.relu = nn.ReLU()
         self.conv=conv
          
     def forward(self, x):
