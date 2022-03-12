@@ -14,8 +14,7 @@ def limit_bn_weight(member):
     if type(member) == nn.BatchNorm2d:
         member.weight.data.abs_().clamp_(min=1e-2)
     
-
-
+    
 class Clamp(nn.Module):
     def forward(self, x):
         return torch.clamp(x, min=-1, max=1)
@@ -55,10 +54,10 @@ class RSign(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
         self.in_channels = in_channels
-        self.shift = Shift(self.in_channels)
+        #self.shift = Shift(self.in_channels)
         
     def forward(self, x):
-        out = self.shift(x)
+        #out = self.shift(x)
         out = QuadraticSign.apply(out)
         return out
 

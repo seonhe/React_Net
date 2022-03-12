@@ -74,8 +74,8 @@ class ReactModel(ReactBase):
         return x.squeeze(dim=2).squeeze(dim=2)
 
 class T_ReactModel(nn.Module):
-    def __init__(self, structure, **kwargs):
-        super().__init__(structure, kwargs)        
+    def __init__(self, structure):
+        super().__init__()        
         self.blocks = nn.ModuleList()
 
         for i in range(len(structure)):

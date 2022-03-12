@@ -14,8 +14,7 @@ def limit_bn_weight(member):
     if type(member) == nn.BatchNorm2d:
         member.weight.data.abs_().clamp_(min=1e-2)
     
-
-
+    
 class Clamp(nn.Module):
     def forward(self, x):
         return torch.clamp(x, min=-1, max=1)
@@ -70,14 +69,14 @@ class RPReLU(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
         self.in_channels = in_channels
-        self.gamma = Shift(self.in_channels)
+        #self.gamma = Shift(self.in_channels)
         self.prelu = nn.PReLU(self.in_channels, init=0.25)
-        self.zeta = Shift(self.in_channels)
+        #self.zeta = Shift(self.in_channels)
 
     def forward(self,x):
-        out = self.gamma(x) # x - gamma
+        #out = self.gamma(x) # x - gamma
         out = self.prelu(out)
-        out = self.zeta(out) # PReLU - zeta
+        #out = self.zeta(out) # PReLU - zeta
         return out
     
     def __repr__(self):

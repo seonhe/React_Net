@@ -5,9 +5,9 @@ from pytorch_lightning import LightningModule
 
 
 
-from react import Conv
-from react import ReactBase
-from react import DWConvReact
+from react_baseline import Conv
+from react_baseline import ReactBase
+from react_baseline import DWConvReact
 torch.use_deterministic_algorithms(True)
 
 
