@@ -60,7 +60,7 @@ class ReactModel(ReactBase):
                             kernel_size=structure[i]['kernel_size'],
                             stride=structure[i]['stride'],
                             padding=structure[i]['padding'],
-                            conv=structure[i]['conv'],
+                            conv='real',
                         )
                     )
                     
