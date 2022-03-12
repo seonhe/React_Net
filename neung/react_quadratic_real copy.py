@@ -83,24 +83,6 @@ class RPReLU(nn.Module):
         return f'{self.__class__.__name__}(in_channels={self.in_channels})'
 
 
-class firstconv3x3(nn.Module):
-    def __init__(self, in_channels, out_channels, stride,conv):
-        super(firstconv3x3, self).__init__()
-
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        if conv == 'real':
-            self.relu = nn.ReLU()
-        else:
-            self.relu = RPReLU(in_channels)
-
-    def forward(self, x):
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        return out
-
 
 class GeneralConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, conv, kernel_size=3, stride=1, padding=1):
@@ -135,11 +117,14 @@ class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
         super().__init__()
         self.block = Block(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
-        self.rprelu = RPReLU(out_channels)
+        self.relu = nn.ReLU()
+        self.conv=conv
          
     def forward(self, x):
         out=self.block(x)
-        out=self.rprelu(x)
+        
+        if self.conv!='fc':
+            out=self.relu(out)          
         
         return out
 

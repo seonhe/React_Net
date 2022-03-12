@@ -23,7 +23,8 @@ class ReactModel(ReactBase):
 
         for i in range(len(structure)):
             if i == 0:
-                self.blocks.append(Conv( # conv + bn
+                self.blocks.append(
+                    Conv( # conv + bn
                             in_channels=structure[i]['in_channels'],
                             out_channels =structure[i]['out_channels'],
                             kernel_size=structure[i]['kernel_size'],
