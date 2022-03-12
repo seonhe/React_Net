@@ -197,7 +197,21 @@ class BinaryActivation(nn.Module):
 
     def forward(self, x):
         return QuadraticSign.apply(x)
-    
+
+class Distillation_loss(nn.Module):
+    def __init__(self, balancing, temperature, classes):
+        super(Distillation_loss,self).__init__()
+        self.alpha=balancing
+        self.T=temperature
+        self.classes=classes
+        
+    def forward(self, y, logits, teacher_logits):      
+        onehot_y=F.one_hot(y,num_classes=self.classes).type(torch.float32)
+          
+        loss1 = F.cross_entropy(onehot_y, F.softmax(logits,dim=1))
+        loss2 = F.cross_entropy(F.softmax(logits/self.T),F.softmax(teacher_logits/self.T))  
+              
+        return (1-self.alpha)*loss1+2*self.alpha*self.T*self.T*loss2
 
 class ReactBase(LightningModule):
     def __init__(self, 
@@ -208,16 +222,26 @@ class ReactBase(LightningModule):
                  lr_patience=50,
                  limit_conv_weight=True,
                  limit_bn_weight=True,
+                 teacher_model=None
                 ):
         super().__init__()
         self.save_hyperparameters()
         # for logging the comp. graph
         #self.example_input_array = torch.ones((512, 3, 32, 32))
+        self.teacher_model=teacher_model
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         logits = self(x)
-        loss = F.nll_loss(logits, y)
+        
+        if self.teacher_model==None:
+                loss = F.nll_loss(logits, y)
+        
+        else:
+            teacher_logits=self.teacher_model(x).detach()
+            loss_function=Distillation_loss(balancing=0.9, temperature=4, classes=10)
+            loss=loss_function(y=y, logits=logits, teacher_logits=teacher_logits)
+        
         self.log('train_loss', loss)
         return loss
 
