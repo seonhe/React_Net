@@ -211,9 +211,9 @@ class Distillation_loss(nn.Module):
         onehot_y=F.one_hot(y,num_classes=self.classes).type(torch.float32)
           
         loss1 = F.cross_entropy(onehot_y, F.softmax(logits,dim=1))
-        loss2 = F.cross_entropy(F.softmax(logits/self.T),F.softmax(teacher_logits/self.T))  
+        loss2 = nn.KLDLoss(F.softmax(logits/self.T, dim=1),F.softmax(teacher_logits/self.T,dim=1))  
               
-        return (1-self.alpha)*loss1+2*self.alpha*self.T*self.T*loss2
+        return (1-self.alpha)*loss1+self.alpha*loss2
 
 class ReactBase(LightningModule):
     def __init__(self, 
