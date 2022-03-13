@@ -49,6 +49,18 @@ class DifferentiableSign(torch.autograd.Function):
         mask, = ctx.saved_tensors
         return mask * grad_output    
 
+class QuadraticSign(torch.autograd.Function):
+    @staticmethod      
+    def forward(ctx, input):
+        grad_mask = ((input.lt(0) & input.ge(-1))*(2*input+2)+(input.lt(1) & input.ge(0))*(-2*input+2)).type(torch.float32)
+        ctx.save_for_backward(grad_mask)                               
+        return 2 * torch.ge(input, 0).type(torch.float32) - 1          
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        mask, = ctx.saved_tensors  
+        return mask * grad_output  
+
 
 class Sign(nn.Module):
     def __init__(self, in_channels):
@@ -56,7 +68,7 @@ class Sign(nn.Module):
         self.in_channels = in_channels
 
     def forward(self, x):
-        out = DifferentiableSign(self.in_channels).apply(x)
+        out = QuadraticSign(self.in_channels).apply(x)
         return out
 
     def __repr__(self):
@@ -134,9 +146,9 @@ class GeneralConv2d(nn.Module):
         real_weights = self.weight.view(self.shape)
         if self.conv == 'scaled_sign':
             scaling_factor = torch.mean(torch.mean(torch.mean(abs(real_weights),dim=3,keepdim=True),dim=2,keepdim=True),dim=1,keepdim=True)
-            y = F.conv2d(x, scaling_factor * DifferentiableSign.apply(real_weights), stride=self.stride, padding=self.padding)
+            y = F.conv2d(x, scaling_factor * QuadraticSign.apply(real_weights), stride=self.stride, padding=self.padding)
         elif self.conv == 'sign':
-            y = F.conv2d(x, DifferentiableSign.apply(real_weights), stride=self.stride, padding=self.padding)
+            y = F.conv2d(x, QuadraticSign.apply(real_weights), stride=self.stride, padding=self.padding)
         else: # real
             y = F.conv2d(x, real_weights, stride=self.stride, padding=self.padding)        
         return y
@@ -144,15 +156,6 @@ class GeneralConv2d(nn.Module):
     def __repr__(self):
         return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}, conv={self.conv})'    
 
-
-class DWConv(nn.Module):
-    def __init__(self, in_channels,out_channels, kernel_size, stride, padding, conv):
-        super().__init__()
-        self.normal = nn.Sequential(
-            GeneralConv2d(in_channels=in_channels, out_channels=in_channels,kernel_size=kernel_size,stride=stride, padding=padding, conv=conv),
-            nn.BatchNorm2d(in_channels),
-
-        )
 
 
 class DWConvReal(nn.Module):
@@ -240,13 +243,30 @@ class Block(nn.Sequential):
         self.add_module(layer.__class__.__name__, layer)
 
 
+class Distillation_loss(nn.Module):
+    def __init__(self, balancing, temperature, classes):
+        super(Distillation_loss,self).__init__()
+        self.alpha=balancing
+        self.T=temperature
+        self.classes=classes
+        
+    def forward(self, y, logits, teacher_logits):      
+        onehot_y=F.one_hot(y,num_classes=self.classes).type(torch.float32)
+          
+        loss1 = F.cross_entropy(onehot_y, F.softmax(logits,dim=1))
+        loss2 = nn.KLDLoss(F.softmax(logits/self.T, dim=1),F.softmax(teacher_logits/self.T,dim=1))  
+              
+        return (1-self.alpha)*loss1+self.alpha*loss2
+
+
 class BinaryActivation(nn.Module):
     def __init__(self):
         super(BinaryActivation, self).__init__()
 
     def forward(self, x):
-        return DifferentiableSign.apply(x)
-    
+        return QuadraticSign.apply(x)
+
+
 
 class ReactBase(LightningModule):
     def __init__(self, 
@@ -257,16 +277,26 @@ class ReactBase(LightningModule):
                  lr_patience=50,
                  limit_conv_weight=True,
                  limit_bn_weight=True,
+                 teacher_model=None
                 ):
         super().__init__()
         self.save_hyperparameters()
         # for logging the comp. graph
         #self.example_input_array = torch.ones((512, 3, 32, 32))
+        self.teacher_model=teacher_model
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         logits = self(x)
-        loss = F.nll_loss(logits, y)
+        
+        if self.teacher_model==None:
+                loss = F.nll_loss(logits, y)
+        
+        else:
+            teacher_logits=self.teacher_model(x).detach()
+            loss_function=Distillation_loss(balancing=0.9, temperature=4, classes=10)
+            loss=loss_function(y=y, logits=logits, teacher_logits=teacher_logits)
+        
         self.log('train_loss', loss)
         return loss
 
@@ -310,4 +340,4 @@ class ReactBase(LightningModule):
             'interval': 'epoch',
             'monitor': 'val_acc',
         }
-        return {'optimizer': optimizer, 'lr_scheduler': scheduler_dict}    
+        return {'optimizer': optimizer, 'lr_scheduler': scheduler_dict}
