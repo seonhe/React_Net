@@ -52,6 +52,22 @@ class DifferentiableSign(torch.autograd.Function):
         mask, = ctx.saved_tensors
         return mask * grad_output    
 
+# class QuadraticSign(torch.autograd.Function):
+#     @staticmethod
+#     def forward(ctx, input):
+#         mask1 = input < -1
+#         mask2 = (input < 0 & input >= -1)
+#         mask3 = (input < 1 & input >= 0) 
+#         mask4 = (input > 1) 
+#         ctx.save_for_backward(mask1, mask2, mask3, mask4)
+#         return 2 * torch.gt(input, 0).type(torch.float32) - 1
+
+#     @staticmethod
+#     def backward(ctx, grad_output):
+#         mask1, mask2, mask3, mask4 = ctx.saved_tensors
+
+#         return mask * grad_output    
+
 
 class QuadraticSign(nn.Module):
     def __init__(self):
