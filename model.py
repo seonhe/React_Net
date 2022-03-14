@@ -34,8 +34,7 @@ class ReactModel(ReactBase):
             )
             else:
                 if structure[i]['conv'] == 'real': # Real block
-                    self.blocks.append(
-                        DWConvReal(
+                    self.blocks.append(DWConvReal(
                             in_channels=structure[i]['in_channels'],
                             out_channels =structure[i]['out_channels'],
                             kernel_size=structure[i]['kernel_size'],
@@ -44,10 +43,8 @@ class ReactModel(ReactBase):
                             conv=structure[i]['conv']
                         )
                     )
-
                 elif structure[i]['conv'] == 'scaled_sign': # scaled.block
-                    self.blocks.append(
-                        DWConvReact(
+                    self.blocks.append(DWConvReact(
                             in_channels=structure[i]['in_channels'],
                             out_channels =structure[i]['out_channels'],
                             kernel_size=structure[i]['kernel_size'],
@@ -56,17 +53,14 @@ class ReactModel(ReactBase):
                             conv=structure[i]['conv']
                         )
                     )
-
                 elif structure[i]['conv'] == 'pool':
                     self.blocks.append(nn.AvgPool2d(
                         kernel_size=structure[i]['kernel_size'],
                         stride=structure[i]['stride']
                         )
                     )
-
                 elif structure[i]['conv'] == 'fc':
-                    self.blocks.append(
-                        GeneralConv2d(
+                    self.blocks.append(GeneralConv2d(
                             in_channels=structure[i]['in_channels'],
                             out_channels=structure[i]['out_channels'],
                             conv='scaled_sign',
@@ -75,10 +69,7 @@ class ReactModel(ReactBase):
                             padding=structure[i]['padding'],
                         )
                     )
-
                     self.blocks.append(nn.Dropout(structure[i]['dropout']))
-
-                    
 
         self.blocks.append(
             GeneralConv2d(
