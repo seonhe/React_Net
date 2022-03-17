@@ -4,261 +4,86 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 
 
-from react import RSign
+from react import RPReLU, RSign
 from react import GeneralConv2d
 from react import ReactBase
 from react import firstconv3x3
-from react import DWConvReact
-from react import DWConvReal
-torch.use_deterministic_algorithms(True)
+
 
 
 
 # in_channels, out_channels, kernel_size, stride, padding, conv
 
-# baseline {'in_channels':128, 'out_channels':128, 'stride':2, 'kernel_size':3, 'padding':1, 'conv':'scaled_sign', 'act_fn':'sign', 'dropout':0},
+# stage_out_channel = [32] + [64] + [128] * 2 + [256] * 2 + [512] * 6 + [1024] * 2
 
-class ReactModel(ReactBase):
+
+
+class Model(nn.Module):
     def __init__(self, structure, **kwargs):
-        super().__init__(structure, kwargs)        
-        self.blocks = nn.ModuleList()
-
-        for i in range(len(structure)-1):
-            if i == 0:
-                self.blocks.append(firstconv3x3( # conv + bn
-                in_channels=structure[i]['in_channels'],
-                out_channels=structure[i]['out_channels'],
-                stride=structure[i]['stride'],
-                conv=structure[i]['conv']
-                )
-            )
-            else:
-                if structure[i]['conv'] == 'real': # Real block
-                    self.blocks.append(DWConvReal(
-                            in_channels=structure[i]['in_channels'],
-                            out_channels =structure[i]['out_channels'],
-                            kernel_size=structure[i]['kernel_size'],
-                            stride=structure[i]['stride'],
-                            padding=structure[i]['padding'],
-                            conv=structure[i]['conv']
-                        )
-                    )
-                elif structure[i]['conv'] == 'scaled_sign': # scaled.block
-                    self.blocks.append(DWConvReact(
-                            in_channels=structure[i]['in_channels'],
-                            out_channels =structure[i]['out_channels'],
-                            kernel_size=structure[i]['kernel_size'],
-                            stride=structure[i]['stride'],
-                            padding=structure[i]['padding'],
-                            conv=structure[i]['conv']
-                        )
-                    )
-                elif structure[i]['conv'] == 'pool':
-                    self.blocks.append(nn.AvgPool2d(
-                        kernel_size=structure[i]['kernel_size'],
-                        stride=structure[i]['stride']
-                        )
-                    )
-                elif structure[i]['conv'] == 'fc':
-                    self.blocks.append(GeneralConv2d(
-                            in_channels=structure[i]['in_channels'],
-                            out_channels=structure[i]['out_channels'],
-                            conv='scaled_sign',
-                            kernel_size=1,
-                            stride=structure[i]['stride'],
-                            padding=structure[i]['padding'],
-                        )
-                    )
-                    self.blocks.append(nn.Dropout(structure[i]['dropout']))
-
-        self.blocks.append(
-            GeneralConv2d(
-                    in_channels=structure[-1]['in_channels'],
-                    out_channels=structure[-1]['out_channels'],
-                    conv='real',
-                    kernel_size=structure[-1]['kernel_size'],
-                    stride=1,
-                    padding=0,
-                )
-        )
-
-        self.blocks.append(nn.Dropout(structure[-1]['dropout']))
-
-
-    def forward(self, x):
-        for idx, block in enumerate(self.blocks):
-            #print(idx, "xshape", x.shape)
-            x = block(x)
-        return F.log_softmax(x.squeeze(dim=2).squeeze(dim=2), dim=1)
+        super().__init__(structure, kwargs)
+        self.blocks = nn.Modulelist()
+        for i in range(len(structure)):
 
 
 
-class T_ReactModel(nn.Module):
-    def __init__(self, structure, **kwargs):
-        super().__init__(structure, kwargs)        
-        self.blocks = nn.ModuleList()
+class UpperBlock(nn.Module):
+    def __init__(self,in_channels,out_channels, kernel_size, stride, padding, block): # block --> Reduction / Normal
+        super().__init__()
+        self.block = block
+        if self.block == 'Reduction':
+            self.pool = nn.AvgPool2d(kernel_size=2, stride=2)
+            self.conv = GeneralConv2d(in_channels=in_channels, out_channels=out_channels, conv="scaled_sign",kernel_size=3,stride=2,padding=1)
+        else: # self.block == 'Normal'
+            self.conv = GeneralConv2d(in_channels=in_channels, out_channels=out_channels, conv="scaled_sign",kernel_size=3,stride=1,padding=1)
 
-        for i in range(len(structure)-1):
-            if i == 0:
-                self.blocks.append(firstconv3x3( # conv + bn
-                in_channels=structure[i]['in_channels'],
-                out_channels=structure[i]['out_channels'],
-                stride=structure[i]['stride'],
-                conv=structure[i]['conv']
-                )
-            )
-            else:
-                if structure[i]['conv'] == 'real': # Real block
-                    self.blocks.append(
-                        DWConvReal(
-                            in_channels=structure[i]['in_channels'],
-                            out_channels =structure[i]['out_channels'],
-                            kernel_size=structure[i]['kernel_size'],
-                            stride=structure[i]['stride'],
-                            padding=structure[i]['padding'],
-                            conv=structure[i]['conv']
-                        )
-                    )
+        #self.conv = GeneralConv2d(in_channels=in_channels, out_channels=out_channels, conv="scaled_sign",kernel_size=kernel_size,stride=stride,padding=padding)
+        self.rsign = RSign(in_channels=in_channels)
+        self.bn = nn.BatchNorm2d(out_channels=in_channels)
+        self.rprelu = RPReLU(in_channels=in_channels)
 
-                elif structure[i]['conv'] == 'scaled_sign': # scaled.block
-                    self.blocks.append(
-                        DWConvReact(
-                            in_channels=structure[i]['in_channels'],
-                            out_channels =structure[i]['out_channels'],
-                            kernel_size=structure[i]['kernel_size'],
-                            stride=structure[i]['stride'],
-                            padding=structure[i]['padding'],
-                            conv=structure[i]['conv']
-                        )
-                    )
+    def forward(self,x):
 
-                elif structure[i]['conv'] == 'pool':
-                    self.blocks.append(nn.AvgPool2d(
-                        kernel_size=structure[i]['kernel_size'],
-                        stride=structure[i]['stride']
-                        )
-                    )
+        rsign_out = self.rsign(x)
+        if self.block == 'Reduction':
+            x = self.pool(x)
+        conv_out = self.conv(rsign_out)
+        bn_out = self.bn(conv_out)
+        shortcut_out = bn_out + x
+        rprelu_out = self.rprelu(shortcut_out)
 
-                elif structure[i]['conv'] == 'fc':
-                    self.blocks.append(
-                        GeneralConv2d(
-                            in_channels=structure[i]['in_channels'],
-                            out_channels=structure[i]['out_channels'],
-                            conv='scaled_sign',
-                            kernel_size=1,
-                            stride=structure[i]['stride'],
-                            padding=structure[i]['padding'],
-                        )
-                    )
+        return rprelu_out
 
-                    self.blocks.append(nn.Dropout(structure[i]['dropout']))
+class LowerBlock(nn.Module):
+    def __init__(self,in_channels, block):
+        super().__init__()
+        self.block = block
+        if self.block == 'Reduction':
+            self.rsign2 = RSign(in_channels=in_channels)
+            self.conv2 = GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv="scaled_sign",kernel_size=1,stride=1,padding=0)
+            self.bn2 = nn.BatchNorm2d(out_channels=in_channels)
+            self.rprelu2 = RPReLU(in_channels=in_channels)
+            
 
-                    
+        self.rsign = RSign(in_channels=in_channels)
+        self.conv = GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv="scaled_sign",kernel_size=1,stride=1,padding=0)
+        self.bn = nn.BatchNorm2d(out_channels=in_channels)
+        self.rprelu = RPReLU(in_channels=in_channels)
 
-        self.blocks.append(
-            GeneralConv2d(
-                    in_channels=structure[-1]['in_channels'],
-                    out_channels=structure[-1]['out_channels'],
-                    conv='real',
-                    kernel_size=structure[-1]['kernel_size'],
-                    stride=1,
-                    padding=0,
-                )
-        )
+    def forward(self,x):
 
-        self.blocks.append(nn.Dropout(structure[-1]['dropout']))
+        rsign_out = self.rsign(x)
+        conv_out = self.conv(rsign_out)
+        bn_out = self.bn(conv_out)
+        shortcut_out = bn_out + x
+        out = self.rprelu(shortcut_out) # Normal block
+        if self.block == 'Reduction':
+            rsign2_out = self.rsign2(x)
+            conv2_out = self.conv2(rsign2_out)
+            bn2_out = self.bn2(conv2_out)
+            shortcut2_out = bn2_out + x
+            rprelu_out2 = self.rprelu(shortcut2_out)
+            out = torch.cat([out, rprelu_out2])
+
+        return out
 
 
-    def forward(self, x):
-        for idx, block in enumerate(self.blocks):
-            #print(idx, "xshape", x.shape)
-            x = block(x)
-        return x.squeeze(dim=2).squeeze(dim=2)
-
-
-
-<<<<<<< HEAD
-
-class T_ReactModel(nn.Module):
-    def __init__(self, structure, **kwargs):
-        super().__init__(structure, kwargs)        
-        self.blocks = nn.ModuleList()
-
-        for i in range(len(structure)-1):
-            if i == 0:
-                self.blocks.append(firstconv3x3( # conv + bn
-                in_channels=structure[i]['in_channels'],
-                out_channels=structure[i]['out_channels'],
-                stride=structure[i]['stride'],
-                conv=structure[i]['conv']
-                )
-            )
-            else:
-                if structure[i]['conv'] == 'real': # Real block
-                    self.blocks.append(
-                        DWConvReal(
-                            in_channels=structure[i]['in_channels'],
-                            out_channels =structure[i]['out_channels'],
-                            kernel_size=structure[i]['kernel_size'],
-                            stride=structure[i]['stride'],
-                            padding=structure[i]['padding'],
-                            conv=structure[i]['conv']
-                        )
-                    )
-
-                elif structure[i]['conv'] == 'scaled_sign': # scaled.block
-                    self.blocks.append(
-                        DWConvReact(
-                            in_channels=structure[i]['in_channels'],
-                            out_channels =structure[i]['out_channels'],
-                            kernel_size=structure[i]['kernel_size'],
-                            stride=structure[i]['stride'],
-                            padding=structure[i]['padding'],
-                            conv=structure[i]['conv']
-                        )
-                    )
-
-                elif structure[i]['conv'] == 'pool':
-                    self.blocks.append(nn.AvgPool2d(
-                        kernel_size=structure[i]['kernel_size'],
-                        stride=structure[i]['stride']
-                        )
-                    )
-
-                elif structure[i]['conv'] == 'fc':
-                    self.blocks.append(
-                        GeneralConv2d(
-                            in_channels=structure[i]['in_channels'],
-                            out_channels=structure[i]['out_channels'],
-                            conv='scaled_sign',
-                            kernel_size=1,
-                            stride=structure[i]['stride'],
-                            padding=structure[i]['padding'],
-                        )
-                    )
-
-                    self.blocks.append(nn.Dropout(structure[i]['dropout']))
-
-                    
-
-        self.blocks.append(
-            GeneralConv2d(
-                    in_channels=structure[-1]['in_channels'],
-                    out_channels=structure[-1]['out_channels'],
-                    conv='real',
-                    kernel_size=structure[-1]['kernel_size'],
-                    stride=1,
-                    padding=0,
-                )
-        )
-
-        self.blocks.append(nn.Dropout(structure[-1]['dropout']))
-
-
-    def forward(self, x):
-        for idx, block in enumerate(self.blocks):
-            #print(idx, "xshape", x.shape)
-            x = block(x)
-        return x.squeeze(dim=2).squeeze(dim=2)
-=======
->>>>>>> 457971a411d2df4b103063329c0c52cbdb149ca4
