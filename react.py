@@ -110,21 +110,15 @@ class RPReLU(nn.Module):
 
 
 class firstconv3x3(nn.Module):
-    def __init__(self, in_channels, out_channels, stride,conv):
+    def __init__(self, in_channels, out_channels, stride):
         super(firstconv3x3, self).__init__()
 
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels)
-        if conv == 'real':
-            self.relu = nn.ReLU()
-        else:
-            self.relu = RPReLU(in_channels)
-
+        
     def forward(self, x):
-
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.relu(out)
         return out
 
 

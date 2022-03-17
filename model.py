@@ -16,18 +16,41 @@ from react import firstconv3x3
 
 # stage_out_channel = [32] + [64] + [128] * 2 + [256] * 2 + [512] * 6 + [1024] * 2
 
-
+structure = [32] + [64] + [128] * 2 + [256] * 2 + [512] * 6 + [1024] * 2
+#[32, 64, 128, 128, 256, 256, 512, 512, 512, 512, 512, 512, 1024, 1024 ]
+# 32 --> 16 --> 8 --> 4 --> 2 --> ,
 
 class Model(nn.Module):
     def __init__(self, structure, **kwargs):
         super().__init__(structure, kwargs)
         self.blocks = nn.Modulelist()
         for i in range(len(structure)):
+            if i == 0:
+                self.blocks.append(firstconv3x3(in_channels=3, out_channels=structure[i],stride=1)
+            elif structure[i] == structure[i-1]: # Normal block
+                block = 'Normal'
+                self.blocks.append(
+                    nn.Sequential(
+                        UpperBlock(in_channels=structure[i-1], out_channels=structure[i],block=block),
+                        LowerBlock(in_channels=structure[i-1],block=block)
+                    )
+                )
+            elif ((structure[i] == structure[i-1] * 2) & structure[i] != ): # Reduction block
+                block = 'Reduction'
+                self.blocks.append(
+                    nn.Sequential(
+                        UpperBlock(in_channels=structure[i-1], out_channels=structure[i], block=block),
+                        LowerBlock(in_channels=structure[i-1], block=block)
+                    )
+                )
+                
+            
+                
 
 
 
 class UpperBlock(nn.Module):
-    def __init__(self,in_channels,out_channels, kernel_size, stride, padding, block): # block --> Reduction / Normal
+    def __init__(self,in_channels,out_channels, block): # block --> Reduction / Normal
         super().__init__()
         self.block = block
         if self.block == 'Reduction':
