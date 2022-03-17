@@ -158,6 +158,54 @@ class GeneralConv2d(nn.Module):
 
 
 
+class DWConvReal(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.conv = conv
+        
+        self.depth = Block(in_channels=in_channels, out_channels=in_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
+        self.point = Block(in_channels=in_channels, out_channels=out_channels,kernel_size=1, stride=1, padding=0, conv=conv)
+        self.relu = nn.ReLU()
+        if stride > 1:
+            self.block = 'Reduction'
+        else:
+            self.block = 'Normal'
+
+    def forward(self, x):
+        out = self.depth(x)
+        out = self.relu(out)
+
+        out = self.point(out)
+        out = self.relu(out)
+
+        return out
+    
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, conv={self.conv}, block={self.block})' 
+
+
+class DWConvReact(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.conv = conv
+        self.depth = Block(in_channels=in_channels, out_channels=in_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
+        self.point1 = Block(in_channels=in_channels, out_channels=in_channels,kernel_size=1, stride=1, padding=0, conv=conv)
+        self.point2 = Block(in_channels=in_channels, out_channels=in_channels,kernel_size=1, stride=1, padding=0, conv=conv)
+        self.rprelu1 = RPReLU(in_channels)
+        self.rprelu21 = RPReLU(in_channels)
+        self.rprelu22 = RPReLU(in_channels)
+
+        self.pool = nn.AvgPool2d(kernel_size=2)
+
+        if stride > 1:
+            self.block = 'Reduction'
+
+        else:
+            self.block = 'Normal'
 
 
     def forward(self, x):
@@ -188,6 +236,18 @@ class GeneralConv2d(nn.Module):
         return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, conv={self.conv}, block={self.block})' 
 
 
+class Block(nn.Sequential):
+    def __init__(self,in_channels, out_channels, kernel_size, stride, padding, conv):
+        super().__init__()
+
+        if conv == 'scaled_sign':
+            self.add_layer(RSign(in_channels=in_channels))
+        ### conv + BN ###
+        self.add_layer(GeneralConv2d(in_channels=in_channels, out_channels=out_channels,kernel_size=kernel_size,stride=stride, padding=padding, conv=conv))
+        self.add_layer(nn.BatchNorm2d(out_channels))
+        
+    def add_layer(self, layer):
+        self.add_module(layer.__class__.__name__, layer)
 
 
 class Distillation_loss(nn.Module):
