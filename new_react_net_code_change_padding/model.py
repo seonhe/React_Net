@@ -41,19 +41,21 @@ class Model(ReactBase):
     def forward(self, x):
         for i, block in enumerate(self.blocks):
             x = block(x)
-            # print("xshape ",x.shape)
+
         x = self.pool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
-        return F.log_softmax(x,dim=1)
+
+        return x
 
 class UpperBlock(nn.Module):
     def __init__(self,in_channels,out_channels, block): # block --> Reduction / Normal
         super().__init__()
         self.block = block
         if self.block == 'Reduction':
-            self.pool = nn.AvgPool2d(kernel_size=2, stride=2)
-            self.conv = GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv="scaled_sign",kernel_size=3,stride=2,padding=1)
+            self.pad = nn.ZeroPad2d(2)
+            self.pool = nn.AvgPool2d(kernel_size=3, stride=2, padding=0)
+            self.conv = GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv="scaled_sign",kernel_size=3,stride=2,padding=2)
         else: # self.block == 'Normal'
             self.conv = GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv="scaled_sign",kernel_size=3,stride=1,padding=1)
 
@@ -66,6 +68,7 @@ class UpperBlock(nn.Module):
 
         rsign_out = self.rsign(x)
         if self.block == 'Reduction':
+            x = self.pad(x)
             x = self.pool(x)
         conv_out = self.conv(rsign_out)
         bn_out = self.bn(conv_out)
@@ -102,7 +105,7 @@ class LowerBlock(nn.Module):
             conv2_out = self.conv2(rsign2_out)
             bn2_out = self.bn2(conv2_out)
             shortcut2_out = bn2_out + x
-            rprelu_out2 = self.rprelu2(shortcut2_out)
+            rprelu_out2 = self.rprelu(shortcut2_out)
             out = torch.cat([out, rprelu_out2], dim=1)
 
         return out

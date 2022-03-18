@@ -98,7 +98,7 @@ class ReactModel(ReactBase):
         for idx, block in enumerate(self.blocks):
             #print(idx, "xshape", x.shape)
             x = block(x)
-        return F.log_softmax(x.squeeze(dim=2).squeeze(dim=2), dim=1)
+        return F.log_softmax(x)
 
 
         
