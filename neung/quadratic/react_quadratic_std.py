@@ -9,13 +9,10 @@ def limit_conv_weight(member):
     if type(member) == GeneralConv2d:
         member.weight.data.clamp_(-1., 1.)
 
-
 def limit_bn_weight(member):
     if type(member) == nn.BatchNorm2d:
         member.weight.data.abs_().clamp_(min=1e-2)
     
-
-
 class Clamp(nn.Module):
     def forward(self, x):
         return torch.clamp(x, min=-1, max=1)
@@ -117,108 +114,76 @@ class GeneralConv2d(nn.Module):
 class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
         super().__init__()
-        self.block = Block(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
+        
+        self.conv=GeneralConv2d(in_channels=in_channels, out_channels=out_channels, conv=conv, kernel_size=kernel_size, stride=stride, padding=padding)
+
         if(out_channels!=10):
             self.relu = nn.ReLU()
         self.out_channels=out_channels
          
-    def forward(self, x):
-        out=self.block(x)
-        
+    def forward(self, x):     
+        out=self.conv(x)
         if self.out_channels!=10:
             out=self.relu(out)          
+        return out 
+
         
-        return out
-
-
-
-
-class DWConvReact(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
+class Block(nn.Module):
+    def __init__(self, in_channels, kernel_size, stride, padding, conv, reduction=None):
         super().__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.conv = conv
-        self.depth = Block(in_channels=in_channels, out_channels=in_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
-        self.point1 = Block(in_channels=in_channels, out_channels=in_channels,kernel_size=1, stride=1, padding=0, conv=conv)
-        self.point2 = Block(in_channels=in_channels, out_channels=in_channels,kernel_size=1, stride=1, padding=0, conv=conv)
-        self.rprelu11 = RPReLU(in_channels)
-        self.rprelu21 = RPReLU(in_channels)
-        self.rprelu22 = RPReLU(in_channels)
-        self.pool = nn.AvgPool2d(kernel_size=2)
-
-        if stride > 1:
-            self.block = 'Reduction'
+        
+        self.rsign=RSign(in_channels=in_channels)
+        self.conv=GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv=conv, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.bn=nn.BatchNorm2d(in_channels)
+        self.rprelu=RPReLU(in_channels=in_channels)
+        self.reduction=reduction
+        
+        if(reduction!=None):
+            self.avgpool=nn.AvgPool2d(kernel_size=2, stride=2)
         else:
-            self.block = 'Normal'
-
+            self.avgpool=nn.AvgPool2d(kernel_size=1, stride=1)
+            
     def forward(self, x):
-        # block -> shortcut -> RPReLU -> block -> shortcut -> RPReLU -> (concatenate)
-        out = self.depth(x) # block
+        out=self.rsign(x)
+        out=self.conv(out)
+        out=self.bn(out)
+        out=out+self.avgpool(x) 
+        out=self.rprelu(out)
         
-        if self.block == 'Reduction':
-            x = self.pool(x)
-        out = out + x # shortcut
-        out1 = self.rprelu11(out) # RPReLU
-
-        out_1 = self.point1(out1) # block
-        out = out_1 + out    #shortcut
-        out = self.rprelu21(out) # RPReLU
-        
-        if self.block == 'Reduction':
-            out_2 = self.point2(out1) # block
-            out_2 = out_2 + out    # shortcut
-            out_2 = self.rprelu22(out_2) # RPReLU
-            out = torch.cat([out, out_2],dim=1) # concatenate
-
         return out
     
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.in_channels}, {self.out_channels}, conv={self.conv}, block={self.block})' 
-
-
-class Block(nn.Sequential):
-    def __init__(self,in_channels, out_channels, kernel_size, stride, padding, conv):
+class Concatenate(nn.Module):
+    def __init__(self, in_channels, kernel_size, stride, padding, conv, reduction=None):
         super().__init__()
-
-        if conv == 'scaled_sign':
-            self.add_layer(RSign(in_channels=in_channels))
-        else:
-            self.add_layer(Shift(in_channels=in_channels))
-        ### conv + BN ###
-        self.add_layer(GeneralConv2d(in_channels=in_channels, out_channels=out_channels,kernel_size=kernel_size,stride=stride, padding=padding, conv=conv))
-        self.add_layer(nn.BatchNorm2d(out_channels))
         
-    def add_layer(self, layer):
-        self.add_module(layer.__class__.__name__, layer)
-
-
-class BinaryActivation(nn.Module):
-    def __init__(self):
-        super(BinaryActivation, self).__init__()
-
+        self.block1=Block(in_channels=in_channels, kernel_size=kernel_size, stride=stride, padding=padding, conv=conv, reduction=reduction)
+        self.block2=Block(in_channels=in_channels, kernel_size=kernel_size, stride=stride, padding=padding, conv=conv, reduction=reduction)
+    
     def forward(self, x):
-        return QuadraticSign.apply(x)
-
-class Distillation_loss(nn.Module):
-    def __init__(self, balancing, temperature, classes):
-        super(Distillation_loss,self).__init__()
-        self.alpha=balancing
-        self.T=temperature
-        self.classes=classes
+        block1=self.block1(x)
+        block2=self.block2(x)
         
-    def forward(self, y, logits, teacher_logits):      
-        onehot_y=F.one_hot(y,num_classes=self.classes).type(torch.float32)
-          
-        loss1 = F.cross_entropy(onehot_y, F.softmax(logits,dim=1))
-        loss2 = nn.KLDLoss(F.softmax(logits/self.T, dim=1),F.softmax(teacher_logits/self.T,dim=1))  
+        torch.cat([block1, block2],dim=1)
+    
+        
+        
+class Distillation_loss(nn.Module):
+    def __init__(self, classes, batch_size):
+        super(Distillation_loss,self).__init__()
+        self.c=classes
+        self.n=batch_size
+        
+    def forward(self, logits, teacher_logits):      
+
+        loss = torch.sum(torch.sum(teacher_logits*torch.log(logits/teacher_logits),dim=0),dim=0).type(torch.float32)
+        loss=-loss/self.n
               
-        return (1-self.alpha)*loss1+self.alpha*loss2
+        return loss
 
 class ReactBase(LightningModule):
     def __init__(self, 
                  adam_init_lr=0.01, 
-                 adam_weight_decay=0,
+                 adam_weight_decay=0.00001,
                  adam_betas=(0.9, 0.999),
                  lr_reduce_factor=0.1,
                  lr_patience=50,
@@ -241,8 +206,8 @@ class ReactBase(LightningModule):
         
         else:
             teacher_logits=self.teacher_model(x).detach()
-            loss_function=Distillation_loss(balancing=0.9, temperature=4, classes=10)
-            loss=loss_function(y=y, logits=logits, teacher_logits=teacher_logits)
+            loss_function=Distillation_loss(classes=10, batch_size=512)
+            loss=loss_function(logits=logits, teacher_logits=teacher_logits)
         
         self.log('train_loss', loss)
         return loss

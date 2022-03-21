@@ -117,14 +117,14 @@ class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
         super().__init__()
         self.block = Block(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,stride=stride,padding=padding,conv=conv)
-        if(conv!='fc'):
+        if(out_channels!=10):
             self.relu = nn.ReLU()
-        self.conv=conv
+        self.out_channels=out_channels
          
     def forward(self, x):
         out=self.block(x)
         
-        if self.conv!='fc':
+        if self.out_channels!=10:
             out=self.relu(out)          
         
         return out
