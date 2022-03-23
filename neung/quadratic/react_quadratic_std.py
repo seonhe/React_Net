@@ -163,7 +163,7 @@ class Concatenate(nn.Module):
         block1=self.block1(x)
         block2=self.block2(x)
         
-        torch.cat([block1, block2],dim=1)
+        return torch.cat([block1, block2],dim=1)
     
         
         
@@ -176,7 +176,7 @@ class Distillation_loss(nn.Module):
     def forward(self, logits, teacher_logits):      
 
         loss = torch.sum(torch.sum(teacher_logits*torch.log(logits/teacher_logits),dim=0),dim=0).type(torch.float32)
-        loss=-loss/self.n
+        loss=loss/self.n
               
         return loss
 
