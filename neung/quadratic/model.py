@@ -144,7 +144,7 @@ class T_ReactModel(nn.Module):
                         in_channels=structure[i]['in_channels'],
                         kernel_size=structure[i]['kernel_size2'],
                         stride=structure[i]['stride2'],
-                        padding=structure[i]['padding'],
+                        padding=0,
                         conv=structure[i]['conv'],
                         reduction=None
                         )
@@ -166,7 +166,7 @@ class T_ReactModel(nn.Module):
                             in_channels=structure[i]['in_channels'],
                             kernel_size=structure[i]['kernel_size2'],
                             stride=structure[i]['stride2'],
-                            padding=structure[i]['padding'],
+                            padding=0,
                             conv=structure[i]['conv'],
                             reduction=None
                         )
