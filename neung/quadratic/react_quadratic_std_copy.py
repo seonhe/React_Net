@@ -114,7 +114,6 @@ class GeneralConv2d(nn.Module):
 class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
         super().__init__()
-        
         self.conv=GeneralConv2d(in_channels=in_channels, out_channels=out_channels, conv=conv, kernel_size=kernel_size, stride=stride, padding=padding)
 
         if(out_channels!=10):
@@ -164,6 +163,28 @@ class Concatenate(nn.Module):
         block2=self.block2(x)
         
         return torch.cat([block1, block2],dim=1)
+    
+class Normal_Block(nn.Sequential):
+    def __init__(self,in_channels, kernel_size, stride, padding, conv):
+        super().__init__()
+
+        self.add_layer(Block(in_channels=in_channels, kernel_size=kernel_size, stride=stride, padding=padding, conv=conv, reduction=None))
+        
+        self.add_layer(Block(in_channels=in_channels, kernel_size=1, stride=1, padding=0, conv=conv, reduction=None))
+        
+    def add_layer(self, layer):
+        self.add_module(layer.__class__.__name__, layer)
+
+class Reduction_Block(nn.Sequential):
+    def __init__(self,in_channels, kernel_size, stride, padding, conv):
+        super().__init__()
+
+        self.add_layer(Block(in_channels=in_channels, kernel_size=kernel_size, stride=stride, padding=padding, conv=conv, reduction='Yes'))
+        
+        self.add_layer(Concatenate(in_channels=in_channels, kernel_size=1, stride=1, padding=0, conv=conv, reduction=None))
+        
+    def add_layer(self, layer):
+        self.add_module(layer.__class__.__name__, layer)
     
         
         

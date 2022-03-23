@@ -5,10 +5,11 @@ from pytorch_lightning import LightningModule
 
 
 
-from react_quadratic_std import Conv
-from react_quadratic_std import ReactBase
-from react_quadratic_std import Block
-from react_quadratic_std import Concatenate
+from react_quadratic_std_copy import Conv
+from react_quadratic_std_copy import ReactBase
+from react_quadratic_std_copy import Normal_Block
+from react_quadratic_std_copy import Reduction_Block
+from react_quadratic_std_copy import Concatenate
 
 torch.use_deterministic_algorithms(True)
 
@@ -47,47 +48,27 @@ class ReactModel(ReactBase):
             else:
                 if structure[i]['in_channels']==structure[i]['out_channels']:
                     self.blocks.append(
-                        Block(
+                        Normal_Block(
                             in_channels=structure[i]['in_channels'],
-                            kernel_size=structure[i]['kernel_size1'],
-                            stride=structure[i]['stride1'],
+                            kernel_size=structure[i]['kernel_size'],
+                            stride=structure[i]['stride'],
                             padding=structure[i]['padding'],
                             conv=structure[i]['conv'],
                             reduction=None
-                        )
                     )
-                    self.blocks.append(
-                    Block(
-                        in_channels=structure[i]['in_channels'],
-                        kernel_size=structure[i]['kernel_size2'],
-                        stride=structure[i]['stride2'],
-                        padding=0,
-                        conv=structure[i]['conv'],
-                        reduction=None
-                        )
-                    )
+                )
+                    
                 else:
                     self.blocks.append(
-                        Block(
+                        Reduction_Block(
                             in_channels=structure[i]['in_channels'],
-                            kernel_size=structure[i]['kernel_size1'],
-                            stride=structure[i]['stride1'],
+                            kernel_size=structure[i]['kernel_size'],
+                            stride=structure[i]['stride'],
                             padding=structure[i]['padding'],
                             conv=structure[i]['conv'],
                             reduction='Yes'
                         )
-                    )
-                
-                    self.blocks.append(
-                        Concatenate(
-                            in_channels=structure[i]['in_channels'],
-                            kernel_size=structure[i]['kernel_size2'],
-                            stride=structure[i]['stride2'],
-                            padding=0,
-                            conv=structure[i]['conv'],
-                            reduction=None
-                        )
-                    )          
+                    )        
                     
         self.blocks.append(nn.Dropout(structure[i]['dropout']))
 
@@ -96,7 +77,7 @@ class ReactModel(ReactBase):
         for idx, block in enumerate(self.blocks):
             x = block(x)
         return F.log_softmax(x.squeeze(dim=2).squeeze(dim=2),dim=1)
-    
+ 
 class T_ReactModel(nn.Module):
     def __init__(self, structure, **kwargs):
         super().__init__(structure, kwargs)        
@@ -130,47 +111,27 @@ class T_ReactModel(nn.Module):
             else:
                 if structure[i]['in_channels']==structure[i]['out_channels']:
                     self.blocks.append(
-                        Block(
+                        Normal_Block(
                             in_channels=structure[i]['in_channels'],
-                            kernel_size=structure[i]['kernel_size1'],
-                            stride=structure[i]['stride1'],
+                            kernel_size=structure[i]['kernel_size'],
+                            stride=structure[i]['stride'],
                             padding=structure[i]['padding'],
                             conv=structure[i]['conv'],
                             reduction=None
-                        )
                     )
-                    self.blocks.append(
-                    Block(
-                        in_channels=structure[i]['in_channels'],
-                        kernel_size=structure[i]['kernel_size2'],
-                        stride=structure[i]['stride2'],
-                        padding=0,
-                        conv=structure[i]['conv'],
-                        reduction=None
-                        )
-                    )
+                )
+                    
                 else:
                     self.blocks.append(
-                        Block(
+                        Reduction_Block(
                             in_channels=structure[i]['in_channels'],
-                            kernel_size=structure[i]['kernel_size1'],
-                            stride=structure[i]['stride1'],
+                            kernel_size=structure[i]['kernel_size'],
+                            stride=structure[i]['stride'],
                             padding=structure[i]['padding'],
                             conv=structure[i]['conv'],
                             reduction='Yes'
                         )
-                    )
-                
-                    self.blocks.append(
-                        Concatenate(
-                            in_channels=structure[i]['in_channels'],
-                            kernel_size=structure[i]['kernel_size2'],
-                            stride=structure[i]['stride2'],
-                            padding=0,
-                            conv=structure[i]['conv'],
-                            reduction=None
-                        )
-                    )          
+                    )        
                     
         self.blocks.append(nn.Dropout(structure[i]['dropout']))
 
