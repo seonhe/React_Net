@@ -117,9 +117,9 @@ class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
         super().__init__()
         self.conv=GeneralConv2d(in_channels=in_channels, out_channels=out_channels, conv=conv, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.bn=nn.BatchNorm2d(in_channels)
         
         if(out_channels!=10):
+            self.bn=nn.BatchNorm2d(out_channels)
             self.relu = nn.ReLU()
         else:
             self.avgpool=nn.AvgPool2d(kernel_size=2, stride=1)
@@ -133,6 +133,7 @@ class Conv(nn.Module):
         else:
           out=self.conv(x)
           out=self.bn(out)    
+          out=self.relu(out)
    
         return out 
 
