@@ -26,7 +26,9 @@ class Model(ReactBase):
                         in_channels=structure[i]['in_channels'],
                         out_channels=structure[i]['out_channels'],
                         stride=structure[i]['stride'], 
-                        padding=structure[i]['padding']
+                        padding=structure[i]['padding'],
+                        kernel_size=structure[i]['kernel_size']
+                        
                     )
                 )
 
@@ -64,7 +66,7 @@ class Model(ReactBase):
                 )
 
         self.pool = nn.AdaptiveAvgPool2d(1)
-        self.fc = nn.Linear(1024,10)
+        self.fc = nn.Linear(512,10)
         
     def forward(self, x):
         for i, block in enumerate(self.blocks):
