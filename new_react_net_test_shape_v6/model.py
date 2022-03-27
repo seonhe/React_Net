@@ -26,7 +26,7 @@ class Model(ReactBase):
         for i in range(len(structure)):
             if i == 0:
                 self.blocks.append(firstconv3x3(in_channels=3, out_channels=structure[i],stride=2))
-            elif(structure[i] == structure[i-1]) : # Normal block
+            elif structure[i] == structure[i-1]: # Normal block
                 block = 'Normal'
                 self.blocks.append(UpperBlock(in_channels=structure[i-1], out_channels=structure[i],block=block))
                 self.blocks.append(LowerBlock(in_channels=structure[i-1],block=block))                      
