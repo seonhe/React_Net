@@ -5,6 +5,8 @@ from pytorch_lightning import LightningModule
 from torchmetrics.functional import accuracy
 from torch.nn.modules import loss
 
+torch.use_deterministic_algorithms(True)
+
 def limit_conv_weight(member):
     if type(member) == GeneralConv2d:
         member.weight.data.clamp_(-1., 1.)
@@ -115,19 +117,50 @@ class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, conv):
         super().__init__()
         self.conv=GeneralConv2d(in_channels=in_channels, out_channels=out_channels, conv=conv, kernel_size=kernel_size, stride=stride, padding=padding)
-
+        
         if(out_channels!=10):
             self.relu = nn.ReLU()
+        else:
+            self.avgpool=nn.AvgPool2d(kernel_size=2, stride=1)
+
         self.out_channels=out_channels
          
-    def forward(self, x):     
-        out=self.conv(x)
-        if self.out_channels!=10:
-            out=self.relu(out)          
+    def forward(self, x):
+        if self.out_channels==10:
+          out=self.avgpool(x)
+          out=self.conv(out)
+        else:
+          out=self.conv(x)
+          out=self.relu(out)    
+   
         return out 
 
         
 class Block(nn.Module):
+    def __init__(self, in_channels, kernel_size, stride, padding, conv, reduction=None):
+        super().__init__()
+        
+        self.rsign=RSign(in_channels=in_channels)
+        self.conv=GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv=conv, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.bn=nn.BatchNorm2d(in_channels)
+        self.rprelu=RPReLU(in_channels=in_channels)
+        self.reduction=reduction
+        
+        if(reduction!=None):
+            self.avgpool=nn.AvgPool2d(kernel_size=2, stride=2)
+        else:
+            self.avgpool=nn.AvgPool2d(kernel_size=1, stride=1)
+            
+    def forward(self, x):
+        out=self.rsign(x)
+        out=self.conv(out)
+        out=self.bn(out)
+        out=out+self.avgpool(x) 
+        out=self.rprelu(out)
+        
+        return out
+    
+class Block1(nn.Module):
     def __init__(self, in_channels, kernel_size, stride, padding, conv, reduction=None):
         super().__init__()
         
@@ -161,8 +194,8 @@ class Concatenate(nn.Module):
     def forward(self, x):
         block1=self.block1(x)
         block2=self.block2(x)
-        
-        return torch.cat([block1, block2],dim=1)
+        out=torch.cat([block1, block2],dim=1)
+        return out
     
 class Normal_Block(nn.Sequential):
     def __init__(self,in_channels, kernel_size, stride, padding, conv):
@@ -170,10 +203,11 @@ class Normal_Block(nn.Sequential):
 
         self.add_layer(Block(in_channels=in_channels, kernel_size=kernel_size, stride=stride, padding=padding, conv=conv, reduction=None))
         
-        self.add_layer(Block(in_channels=in_channels, kernel_size=1, stride=1, padding=0, conv=conv, reduction=None))
+        self.add_layer(Block1(in_channels=in_channels, kernel_size=1, stride=1, padding=0, conv=conv, reduction=None))
         
     def add_layer(self, layer):
         self.add_module(layer.__class__.__name__, layer)
+        
 
 class Reduction_Block(nn.Sequential):
     def __init__(self,in_channels, kernel_size, stride, padding, conv):
