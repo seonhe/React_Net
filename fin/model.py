@@ -5,11 +5,11 @@ from pytorch_lightning import LightningModule
 
 
 
-from react_quadratic_std_copy import Conv
-from react_quadratic_std_copy import ReactBase
-from react_quadratic_std_copy import Normal_Block
-from react_quadratic_std_copy import Reduction_Block
-from react_quadratic_std_copy import Concatenate
+from react import Conv
+from react import ReactBase
+from react import Normal_Block
+from react import Reduction_Block
+from react import Concatenate
 
 torch.use_deterministic_algorithms(True)
 

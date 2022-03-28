@@ -149,15 +149,19 @@ class Block(nn.Module):
         self.reduction=reduction
         
         if(reduction!=None):
-            self.avgpool=nn.AvgPool2d(kernel_size=2, stride=2)
+            self.downsample=nn.Sequential(
+                nn.AvgPool2d(kernel_size=2, stride=2),
+                GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv=conv, kernel_size=1, stride=1, padding=0),
+                nn.BatchNorm2d(in_channels),
+            )
         else:
-            self.avgpool=nn.AvgPool2d(kernel_size=1, stride=1)
+            self.downsample=nn.AvgPool2d(kernel_size=1, stride=1)
             
     def forward(self, x):
         out=self.rsign(x)
         out=self.conv(out)
         out=self.bn(out)
-        out=out+self.avgpool(x) 
+        out=out+self.downsample(x) 
         out=self.rprelu(out)
         
         return out
@@ -173,18 +177,23 @@ class Block1(nn.Module):
         self.reduction=reduction
         
         if(reduction!=None):
-            self.avgpool=nn.AvgPool2d(kernel_size=2, stride=2)
+            self.downsample=nn.Sequential(
+                nn.AvgPool2d(kernel_size=2, stride=2),
+                GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv=conv, kernel_size=1, stride=1, padding=0),
+                nn.BatchNorm2d(in_channels),
+            )
         else:
-            self.avgpool=nn.AvgPool2d(kernel_size=1, stride=1)
+            self.downsample=nn.AvgPool2d(kernel_size=1, stride=1)
             
     def forward(self, x):
         out=self.rsign(x)
         out=self.conv(out)
         out=self.bn(out)
-        out=out+self.avgpool(x) 
+        out=out+self.downsample(x) 
         out=self.rprelu(out)
         
         return out
+
     
 class Concatenate(nn.Module):
     def __init__(self, in_channels, kernel_size, stride, padding, conv, reduction=None):
