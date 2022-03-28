@@ -82,7 +82,14 @@ class BasicBlock(nn.Module):
     def __init__(self,in_channels,kernel_size,stride,padding):
         super().__init__()
 
-        self.pool = nn.AvgPool2d(kernel_size=stride, stride=stride)
+        if stride == 2:
+            self.pool = nn.Sequential(
+                nn.AvgPool2d(kernel_size=stride, stride=stride),
+                GeneralConv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=1, stride=1,conv="scaled_sign",padding=0),
+                nn.BatchNorm2d(in_channels)
+            )
+        else:
+            self.pool = nn.Identity()
 
         self.rsign = RSign(in_channels=in_channels)
         self.conv = GeneralConv2d(in_channels=in_channels, out_channels=in_channels, conv="scaled_sign",kernel_size=kernel_size,stride=stride,padding=padding)
