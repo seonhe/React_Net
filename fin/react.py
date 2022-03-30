@@ -122,7 +122,7 @@ class Conv(nn.Module):
             self.bn=nn.BatchNorm2d(out_channels)
             self.relu = nn.ReLU()
         else:
-            self.avgpool=nn.AvgPool2d(kernel_size=2, stride=1)
+            self.avgpool=nn.AvgPool2d(kernel_size=4, stride=1)
 
         self.out_channels=out_channels
          
