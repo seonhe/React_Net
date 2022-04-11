@@ -44,3 +44,4 @@ void RPReLu(int in_channels, int input_size, float* input, float* relu_parameter
     PReLu(in_channels, input_size, input, relu_parameter);
     Shift(in_channels, input_size, input, zeta_parameter);
 }
+
